@@ -44,3 +44,34 @@ jobs:
         env:
           EXPO_NO_TELEMETRY: '1'
           NEXT_TELEMETRY_DISABLED: '1'
+
+  database:
+    name: Migrations, RLS tests, generated types
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Start local Postgres
+        run: pnpm exec supabase db start
+
+      - name: Reset database (migrations + seed)
+        run: pnpm supabase:reset
+
+      - name: pgTAP tests
+        run: pnpm supabase:test
+
+      - name: Generated types are up to date
+        run: |
+          pnpm supabase:types
+          git diff --exit-code -- packages/types/src/database.types.ts
