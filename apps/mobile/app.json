@@ -1,0 +1,30 @@
+{
+  "expo": {
+    "name": "מהצעה לתשלום",
+    "slug": "quote-to-cash",
+    "scheme": "quotetocash",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "platforms": ["ios", "android", "web"],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.quotetocash.app"
+    },
+    "android": {
+      "package": "com.quotetocash.app"
+    },
+    "web": {
+      "output": "static",
+      "bundler": "metro"
+    },
+    "plugins": ["expo-router", "expo-font", "expo-localization"],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "supportsRTL": true,
+      "forcesRTL": true
+    }
+  }
+}

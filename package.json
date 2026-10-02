@@ -1,0 +1,30 @@
+{
+  "name": "quote-to-cash",
+  "private": true,
+  "packageManager": "pnpm@10.28.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "dev:web": "turbo run dev --filter=@q2c/web",
+    "dev:mobile": "turbo run dev --filter=@q2c/mobile",
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "supabase:start": "supabase start",
+    "supabase:stop": "supabase stop",
+    "supabase:reset": "supabase db reset"
+  },
+  "devDependencies": {
+    "@q2c/config": "workspace:*",
+    "prettier": "^3.9.9",
+    "supabase": "^2.119.0",
+    "turbo": "^2.11.7",
+    "typescript": "~6.0.3"
+  },
+  "prettier": "@q2c/config/prettier"
+}
