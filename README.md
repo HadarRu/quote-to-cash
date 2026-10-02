@@ -20,6 +20,8 @@ supabase/
   config.toml    Local Supabase stack (Supabase CLI)
   migrations/    SQL migrations: every DB change goes here
   functions/     Edge Functions
+  tests/         pgTAP tests (RLS tenant isolation, appointment overlap, schema rules)
+  seed.sql       Two test businesses; local development and tests only
 ```
 
 Workspace packages export TypeScript source directly (no build step); Metro and Next
@@ -52,12 +54,34 @@ pnpm dev                      # both
 
 ```bash
 pnpm supabase:start           # starts Postgres, Auth, Storage, Studio (Docker)
-pnpm supabase:reset           # re-applies supabase/migrations from scratch
+pnpm supabase:reset           # drops the local DB, applies supabase/migrations, loads seed.sql
+pnpm supabase:test            # pgTAP tests in supabase/tests (needs the seed)
+pnpm supabase:types           # regenerates packages/types/src/database.types.ts
 pnpm supabase:stop
 ```
 
 `supabase:start` prints the local `SUPABASE_URL` and anon key; copy them into `.env`.
-Create migrations with `pnpm exec supabase migration new <name>`.
+Create migrations with `pnpm exec supabase migration new <name>`, then run `supabase:reset`,
+`supabase:test` and `supabase:types` and commit the regenerated types (CI fails if they are stale).
+
+`supabase/seed.sql` creates two businesses (A and B), each with an OWNER and an EMPLOYEE, and one
+row in every table. It is for local development and tests only and refuses to run on a database
+that already has businesses. Never run it against production.
+
+### Database model
+
+- Every business table has `business_id`, and RLS lets only active members of that business
+  (`app.is_member(business_id)`) select, insert and update its rows. There are no DELETE policies:
+  rows are soft-deleted via `deleted_at`.
+- Child rows reference their parents through `(business_id, id)` foreign keys, so a row can never
+  point at another business's data.
+- `business_member`, `business_settings` and `business` updates need OWNER or ADMIN; only an OWNER
+  can grant or change the OWNER role. New businesses are created with `create_business(name)`,
+  which makes the caller its OWNER.
+- `quote_number` and `invoice_number` are assigned by the server per business and never change.
+- Confirmed appointments of one business cannot overlap (`appointment_no_overlapping_confirmed`).
+- `subscription` is read-only for members (written by the billing backend); `audit_log` is
+  insert-only for everyone, including the table owner.
 
 ## Quality checks
 
@@ -70,6 +94,12 @@ pnpm typecheck
 pnpm lint
 pnpm test
 pnpm build
+
+# database job (Docker)
+pnpm exec supabase db start
+pnpm supabase:reset
+pnpm supabase:test
+pnpm supabase:types && git diff --exit-code -- packages/types/src/database.types.ts
 ```
 
 ## Environment variables
