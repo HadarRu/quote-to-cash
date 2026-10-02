@@ -34,12 +34,19 @@ export default function Home() {
   return (
     <Screen
       footer={
-        <Button
-          testID="home-settings"
-          variant="secondary"
-          label={strings.appHome.settings}
-          onPress={() => router.push('/settings')}
-        />
+        <>
+          <Button
+            testID="home-customers"
+            label={strings.appHome.customers}
+            onPress={() => router.push('/customers')}
+          />
+          <Button
+            testID="home-settings"
+            variant="secondary"
+            label={strings.appHome.settings}
+            onPress={() => router.push('/settings')}
+          />
+        </>
       }
     >
       <View style={styles.header}>

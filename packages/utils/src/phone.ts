@@ -47,3 +47,29 @@ export function formatPhoneIL(e164: string): string {
     return `${national.slice(0, 2)}-${national.slice(2, 5)}-${national.slice(5)}`;
   return e164;
 }
+
+/** `tel:` link for the dialer. */
+export function telUrl(e164: string): string {
+  return `tel:${e164}`;
+}
+
+/** WhatsApp click-to-chat link (wa.me expects digits only, no '+'). */
+export function whatsappUrl(e164: string): string {
+  return `https://wa.me/${e164.replace(/\D/g, '')}`;
+}
+
+/**
+ * True when the digits the user typed appear in the number, in either its
+ * international (972...) or Israeli national (05...) form. "052-12", "+97252"
+ * and "52123" all match +972521234567.
+ */
+export function phoneMatches(e164: string, typed: string): boolean {
+  const query = typed.replace(/\D/g, '');
+  if (!query) return false;
+  const international = e164.replace(/\D/g, '');
+  const prefix = IL_COUNTRY_CODE;
+  const national = international.startsWith(prefix)
+    ? `0${international.slice(prefix.length)}`
+    : international;
+  return international.includes(query) || national.includes(query);
+}

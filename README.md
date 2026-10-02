@@ -123,6 +123,26 @@ applied without verifying the new number); keep the SMS cooldown at 60 s; and de
 with `pnpm exec supabase functions deploy business-setup`. The local Twilio entries in
 `config.toml` are placeholders for the test numbers only.
 
+## Customers
+
+Customers only (no leads, tags or segments), in `apps/mobile/app/(app)/customers`:
+
+- **List**: most recently updated first, instant search by name (every word) or by any part of the
+  phone in any format (`054-765`, `+97254`, `4321`). The latest 500 customers are kept on the device,
+  so the list, search and details open offline from the last saved copy (with a notice).
+- **Details**: call (`tel:`), WhatsApp (`wa.me`), addresses, and the customer's quote history.
+- **Add / Edit**: name and phone are required; email, one address and notes are optional
+  (`CustomerSchema` in `packages/types`). A phone that another active customer of the business
+  already has shows that customer with a button to open it instead of saving a duplicate (also
+  enforced by the `(business_id, phone_e164)` unique index).
+- **Quick create**: name and phone only, `QuickCreateCustomer` (`QuickCustomerSchema`) for use
+  inside other flows such as a new quote; also at `/customers/new?mode=quick`.
+- **Delete** is a soft delete (`deleted_at`): the customer leaves the list, their quotes stay
+  readable, and the phone can be used for a new customer.
+
+All reads and writes go through the Supabase Data API under RLS (`src/customers/db.ts`); the save
+and duplicate rules are in `src/customers/service.ts` and unit-tested with an in-memory database.
+
 ## Quality checks
 
 The same commands run in CI (`.github/workflows/ci.yml`):

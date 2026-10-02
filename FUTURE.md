@@ -24,3 +24,7 @@ Ideas noted while building, intentionally **not** implemented yet.
   setup, run in CI against `supabase start`.
 - `deno check` of Edge Functions in CI.
 - Edit business details and logo from Settings; show the logo on quotes.
+- Server-side customer search (pg_trgm) for businesses with more than the 500 customers kept on the
+  device.
+- Offline writes: queue customer edits made without a connection and sync them later.
+- Restore a soft-deleted customer; manage several addresses per customer from the form.
