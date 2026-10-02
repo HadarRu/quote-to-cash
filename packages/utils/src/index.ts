@@ -1,2 +1,2 @@
-export * from './money';
-export * from './phone';
+export * from './money.ts';
+export * from './phone.ts';

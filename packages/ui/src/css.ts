@@ -5,7 +5,7 @@ import {
   SPACING_UNIT,
   typography,
   type ThemeColors,
-} from './tokens';
+} from './tokens.ts';
 
 const kebab = (name: string): string => name.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
 

@@ -11,9 +11,6 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
-  "dependencies": {
-    "@q2c/types": "workspace:*"
-  },
   "devDependencies": {
     "@q2c/config": "workspace:*",
     "eslint": "^9.39.5",

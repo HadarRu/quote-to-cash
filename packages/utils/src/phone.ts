@@ -1,4 +1,5 @@
-import { phoneE164Schema, type PhoneE164 } from '@q2c/types';
+/** E.164: '+', country code, up to 15 digits in total. */
+export const E164_PATTERN = /^\+[1-9]\d{1,14}$/;
 
 const IL_COUNTRY_CODE = '972';
 /** Israeli national number without trunk 0: landlines 8 digits, mobile (05x) and VoIP (07x) 9 digits. */
@@ -9,7 +10,7 @@ const IL_NATIONAL_NUMBER = /^(?:[23489]\d{7}|[57]\d{8})$/;
  * ("052-123-4567", "+972 52 123 4567", "00972521234567") to E.164.
  * Returns null when the input is not a valid Israeli number.
  */
-export function toE164IL(input: string): PhoneE164 | null {
+export function toE164IL(input: string): string | null {
   let digits = input.trim().replace(/[\s\-().]/g, '');
   if (!/^\+?\d+$/.test(digits)) return null;
 
@@ -25,9 +26,24 @@ export function toE164IL(input: string): PhoneE164 | null {
   if (digits.startsWith('0')) digits = digits.slice(1);
 
   if (!IL_NATIONAL_NUMBER.test(digits)) return null;
-  return phoneE164Schema.parse(`+${IL_COUNTRY_CODE}${digits}`);
+  return `+${IL_COUNTRY_CODE}${digits}`;
 }
 
-export function isE164(value: string): value is PhoneE164 {
-  return phoneE164Schema.safeParse(value).success;
+export function isE164(value: string): boolean {
+  return E164_PATTERN.test(value);
+}
+
+/**
+ * Formats an Israeli E.164 number for display: +972521234567 -> 052-123-4567,
+ * +97231234567 -> 03-123-4567. Other numbers are returned unchanged.
+ */
+export function formatPhoneIL(e164: string): string {
+  const prefix = `+${IL_COUNTRY_CODE}`;
+  if (!e164.startsWith(prefix)) return e164;
+  const national = `0${e164.slice(prefix.length)}`;
+  if (national.length === 10)
+    return `${national.slice(0, 3)}-${national.slice(3, 6)}-${national.slice(6)}`;
+  if (national.length === 9)
+    return `${national.slice(0, 2)}-${national.slice(2, 5)}-${national.slice(5)}`;
+  return e164;
 }

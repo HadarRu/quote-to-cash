@@ -36,5 +36,9 @@ export default defineConfig(
       globals: { ...globals.node },
     },
   },
+  {
+    files: ['**/*.cjs'],
+    rules: { '@typescript-eslint/no-require-imports': 'off' },
+  },
   prettier,
 );

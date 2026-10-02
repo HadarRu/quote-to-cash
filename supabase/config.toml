@@ -257,17 +257,29 @@ otp_expiry = 3600
 
 [auth.sms]
 # Allow/disallow new user signups via SMS to your project.
-enable_signup = false
+# Phone OTP is the only sign-in method of the app.
+enable_signup = true
 # If enabled, users need to confirm their phone number before signing in.
-enable_confirmations = false
+# Must stay enabled: otherwise GoTrue applies a phone change (PUT /user) at once,
+# without verifying the new number. Set "Confirm phone" on the hosted project too.
+enable_confirmations = true
 # Template for sending OTP to users
 template = "Your code is {{ .Code }}"
 # Controls the minimum amount of time that must pass before sending another sms otp.
-max_frequency = "5s"
+# Matches the resend cooldown shown in the app (OTP_RESEND_COOLDOWN_SECONDS).
+max_frequency = "60s"
 
 # Use pre-defined map of phone number to OTP for testing.
-# [auth.sms.test_otp]
-# 4152127777 = "123456"
+# Local development only: these numbers never receive an SMS and always accept the
+# code below. Seed users are 972500000001-4; 972501234567 is a fresh number for
+# trying sign-up end to end.
+[auth.sms.test_otp]
+972500000001 = "123456"
+972500000002 = "123456"
+972500000003 = "123456"
+972500000004 = "123456"
+972501234567 = "123456"
+972501234568 = "123456"
 
 # Configure logged in session timeouts.
 # [auth.sessions]
@@ -287,12 +299,15 @@ max_frequency = "5s"
 # uri = "pg-functions://<database>/<schema>/<hook_name>"
 
 # Configure one of the supported SMS providers: `twilio`, `twilio_verify`, `messagebird`, `textlocal`, `vonage`.
+# Local development: GoTrue requires an enabled provider even for the test_otp
+# numbers above, which never send an SMS. These placeholders are not credentials;
+# real numbers fail to send locally. Production SMS is configured on the hosted
+# project (see README), never in this file.
 [auth.sms.twilio]
-enabled = false
-account_sid = ""
-message_service_sid = ""
-# DO NOT commit your Twilio auth token to git. Use environment variable substitution instead:
-auth_token = "env(SUPABASE_AUTH_SMS_TWILIO_AUTH_TOKEN)"
+enabled = true
+account_sid = "local-development-placeholder"
+message_service_sid = "local-development-placeholder"
+auth_token = "local-development-placeholder"
 
 # Multi-factor-authentication is available to Supabase Pro plan.
 [auth.mfa]

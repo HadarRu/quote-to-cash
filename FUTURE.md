@@ -7,8 +7,7 @@ Ideas noted while building, intentionally **not** implemented yet.
 - Typed env validation (Zod schema in `packages/types`) for `SUPABASE_URL`, `PUBLIC_APP_URL`, etc., and
   wiring them into Next (`NEXT_PUBLIC_*`) and Expo (`EXPO_PUBLIC_*` / `app.config.ts` `extra`).
 - Real app icon, splash screen and web favicon for the mobile app (`app.json` `icon` / `web.favicon`).
-- Phone display formatter (`+972521234567` → `052-123-4567`) in `packages/utils`.
-- Shared React Native component kit (Button, Card, Screen with loading/empty/error states) in `packages/ui`.
+- Move the mobile component kit (`apps/mobile/src/components`) into `packages/ui` once the web app needs it.
 - Turborepo remote cache in CI; EAS Build workflow for native binaries.
 - Appointment overlap per assigned member (today a business cannot double-book at all, which fits a
   one-person business but not a team).
@@ -19,3 +18,9 @@ Ideas noted while building, intentionally **not** implemented yet.
 - Lock issued invoices against edits (Israeli tax rules), with credit notes for corrections.
 - Team invites by phone number (`business_member.status = 'invited'` before the user exists).
 - Zod enum schemas derived from `Constants` in the generated database types.
+- Store the session in the device keychain (expo-secure-store with an encrypted AsyncStorage
+  payload) instead of plain AsyncStorage.
+- Committed end-to-end tests (Playwright on the web build, Maestro on devices) for sign-up and
+  setup, run in CI against `supabase start`.
+- `deno check` of Edge Functions in CI.
+- Edit business details and logo from Settings; show the logo on quotes.

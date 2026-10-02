@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatMoney, fromMinor, toMinor } from './money';
+import { formatMoney, fromMinor, toMinor } from './money.ts';
 
 describe('money', () => {
   it('converts shekels to integer agorot', () => {

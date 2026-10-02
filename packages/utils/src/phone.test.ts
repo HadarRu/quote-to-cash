@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isE164, toE164IL } from './phone';
+import { formatPhoneIL, isE164, toE164IL } from './phone.ts';
 
 describe('toE164IL', () => {
   it.each([
@@ -28,5 +28,19 @@ describe('isE164', () => {
     expect(isE164('+972521234567')).toBe(true);
     expect(isE164('0521234567')).toBe(false);
     expect(isE164('+0521234567')).toBe(false);
+  });
+});
+
+describe('formatPhoneIL', () => {
+  it.each([
+    ['+972521234567', '052-123-4567'],
+    ['+97231234567', '03-123-4567'],
+    ['+12125550100', '+12125550100'],
+  ])('formats %s as %s', (input, expected) => {
+    expect(formatPhoneIL(input)).toBe(expected);
+  });
+
+  it('round-trips with toE164IL', () => {
+    expect(toE164IL(formatPhoneIL('+972771234567'))).toBe('+972771234567');
   });
 });
