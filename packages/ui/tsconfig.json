@@ -1,0 +1,4 @@
+{
+  "extends": "@q2c/config/tsconfig/base.json",
+  "include": ["src"]
+}

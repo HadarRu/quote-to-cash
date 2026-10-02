@@ -1,0 +1,35 @@
+{
+  "name": "@q2c/config",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./eslint/base": "./eslint/base.js",
+    "./eslint/react": "./eslint/react.js",
+    "./eslint/next": "./eslint/next.js",
+    "./prettier": "./prettier.js",
+    "./tsconfig/base.json": "./tsconfig/base.json",
+    "./tsconfig/nextjs.json": "./tsconfig/nextjs.json",
+    "./tsconfig/expo.json": "./tsconfig/expo.json"
+  },
+  "scripts": {
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@eslint/js": "^9.39.5",
+    "@next/eslint-plugin-next": "^16.3.8",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.13.0",
+    "typescript-eslint": "^8.71.0"
+  },
+  "devDependencies": {
+    "eslint": "^9.39.5"
+  },
+  "peerDependencies": {
+    "eslint": "^9.39.0",
+    "prettier": "^3.9.0",
+    "typescript": "~6.0.3"
+  }
+}
