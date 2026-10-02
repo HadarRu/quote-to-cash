@@ -148,9 +148,12 @@ export type Database = {
           email: string | null;
           id: string;
           legal_name: string | null;
+          logo_path: string | null;
           name: string;
           phone_e164: string | null;
           tax_id: string | null;
+          tax_status: Database['public']['Enums']['tax_status'] | null;
+          trade: Database['public']['Enums']['business_trade'] | null;
           updated_at: string;
         };
         Insert: {
@@ -159,9 +162,12 @@ export type Database = {
           email?: string | null;
           id?: string;
           legal_name?: string | null;
+          logo_path?: string | null;
           name: string;
           phone_e164?: string | null;
           tax_id?: string | null;
+          tax_status?: Database['public']['Enums']['tax_status'] | null;
+          trade?: Database['public']['Enums']['business_trade'] | null;
           updated_at?: string;
         };
         Update: {
@@ -170,9 +176,12 @@ export type Database = {
           email?: string | null;
           id?: string;
           legal_name?: string | null;
+          logo_path?: string | null;
           name?: string;
           phone_e164?: string | null;
           tax_id?: string | null;
+          tax_status?: Database['public']['Enums']['tax_status'] | null;
+          trade?: Database['public']['Enums']['business_trade'] | null;
           updated_at?: string;
         };
         Relationships: [];
@@ -1242,10 +1251,21 @@ export type Database = {
     };
     Functions: {
       create_business: { Args: { p_name: string }; Returns: string };
+      setup_business: {
+        Args: {
+          p_business_id: string;
+          p_name: string;
+          p_tax_status: Database['public']['Enums']['tax_status'];
+          p_trade: Database['public']['Enums']['business_trade'];
+        };
+        Returns: string;
+      };
     };
     Enums: {
       appointment_status: 'proposed' | 'confirmed' | 'completed' | 'cancelled' | 'no_show';
       audit_action: 'insert' | 'update' | 'delete';
+      business_trade:
+        'electrician' | 'plumber' | 'hvac' | 'handyman' | 'locksmith' | 'painter' | 'other';
       file_kind: 'logo' | 'quote_attachment' | 'job_photo' | 'invoice_pdf' | 'signature' | 'other';
       invoice_status: 'draft' | 'issued' | 'partially_paid' | 'paid' | 'void';
       job_status: 'scheduled' | 'in_progress' | 'on_hold' | 'completed' | 'cancelled';
@@ -1259,6 +1279,7 @@ export type Database = {
       quote_slot_option_status: 'offered' | 'selected' | 'declined';
       quote_status: 'draft' | 'sent' | 'viewed' | 'approved' | 'rejected' | 'expired' | 'cancelled';
       subscription_status: 'trialing' | 'active' | 'past_due' | 'cancelled' | 'expired';
+      tax_status: 'osek_patur' | 'osek_murshe' | 'company';
     };
     CompositeTypes: {
       [_ in never]: never;
@@ -1372,6 +1393,15 @@ export const Constants = {
     Enums: {
       appointment_status: ['proposed', 'confirmed', 'completed', 'cancelled', 'no_show'],
       audit_action: ['insert', 'update', 'delete'],
+      business_trade: [
+        'electrician',
+        'plumber',
+        'hvac',
+        'handyman',
+        'locksmith',
+        'painter',
+        'other',
+      ],
       file_kind: ['logo', 'quote_attachment', 'job_photo', 'invoice_pdf', 'signature', 'other'],
       invoice_status: ['draft', 'issued', 'partially_paid', 'paid', 'void'],
       job_status: ['scheduled', 'in_progress', 'on_hold', 'completed', 'cancelled'],
@@ -1384,6 +1414,7 @@ export const Constants = {
       quote_slot_option_status: ['offered', 'selected', 'declined'],
       quote_status: ['draft', 'sent', 'viewed', 'approved', 'rejected', 'expired', 'cancelled'],
       subscription_status: ['trialing', 'active', 'past_due', 'cancelled', 'expired'],
+      tax_status: ['osek_patur', 'osek_murshe', 'company'],
     },
   },
 } as const;
