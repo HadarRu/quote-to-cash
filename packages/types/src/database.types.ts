@@ -1074,9 +1074,13 @@ export type Database = {
           description: string | null;
           id: string;
           is_active: boolean;
+          is_favorite: boolean;
+          last_used_at: string | null;
           name: string;
+          starter_key: string | null;
           unit: string;
           updated_at: string;
+          vat_included: boolean;
         };
         Insert: {
           business_id: string;
@@ -1087,9 +1091,13 @@ export type Database = {
           description?: string | null;
           id?: string;
           is_active?: boolean;
+          is_favorite?: boolean;
+          last_used_at?: string | null;
           name: string;
+          starter_key?: string | null;
           unit?: string;
           updated_at?: string;
+          vat_included?: boolean;
         };
         Update: {
           business_id?: string;
@@ -1100,9 +1108,13 @@ export type Database = {
           description?: string | null;
           id?: string;
           is_active?: boolean;
+          is_favorite?: boolean;
+          last_used_at?: string | null;
           name?: string;
+          starter_key?: string | null;
           unit?: string;
           updated_at?: string;
+          vat_included?: boolean;
         };
         Relationships: [
           {
@@ -1129,6 +1141,7 @@ export type Database = {
           id: string;
           name: string;
           sort_order: number;
+          starter_key: string | null;
           updated_at: string;
         };
         Insert: {
@@ -1138,6 +1151,7 @@ export type Database = {
           id?: string;
           name: string;
           sort_order?: number;
+          starter_key?: string | null;
           updated_at?: string;
         };
         Update: {
@@ -1147,6 +1161,7 @@ export type Database = {
           id?: string;
           name?: string;
           sort_order?: number;
+          starter_key?: string | null;
           updated_at?: string;
         };
         Relationships: [
@@ -1251,6 +1266,7 @@ export type Database = {
     };
     Functions: {
       create_business: { Args: { p_name: string }; Returns: string };
+      import_starter_price_list: { Args: { p_business_id: string; p_list: Json }; Returns: number };
       setup_business: {
         Args: {
           p_business_id: string;

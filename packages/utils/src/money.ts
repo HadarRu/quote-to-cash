@@ -31,3 +31,14 @@ const ilsFormatter = new Intl.NumberFormat('he-IL', {
 export function formatMoney(minor: number): string {
   return ilsFormatter.format(fromMinor(minor));
 }
+
+/**
+ * Reads a price typed by the user in shekels ("250", "1,234.5", "₪ 99.90") and
+ * returns agorot, or null when it is not a valid non-negative amount with at
+ * most two decimals.
+ */
+export function parseMoneyInput(text: string): number | null {
+  const cleaned = text.replace(/[\s,₪]/g, '');
+  if (!/^\d+(\.\d{1,2})?$/.test(cleaned)) return null;
+  return toMinor(Number(cleaned));
+}

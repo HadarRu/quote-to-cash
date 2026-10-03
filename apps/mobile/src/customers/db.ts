@@ -1,6 +1,7 @@
 import type { AppSupabaseClient } from '../lib/supabase';
 import type { CustomerDetail, CustomerListItem } from './model';
-import type { CustomersDb, DbResult } from './service';
+import type { DbResult } from '../lib/db';
+import type { CustomersDb } from './service';
 
 /** Most recent customers kept on the device for the list and offline search. */
 export const CUSTOMER_LIST_LIMIT = 500;

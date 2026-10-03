@@ -143,6 +143,25 @@ Customers only (no leads, tags or segments), in `apps/mobile/app/(app)/customers
 All reads and writes go through the Supabase Data API under RLS (`src/customers/db.ts`); the save
 and duplicate rules are in `src/customers/service.ts` and unit-tested with an in-memory database.
 
+## Price list
+
+Categories and services in `apps/mobile/app/(app)/price-list`:
+
+- Each service has a name, category, unit (`unit`, `point`, `meter`, `sqm`, `hour`, `job`, shown in
+  Hebrew), unit price in agorot (never negative), whether the price includes VAT, and a favorite flag.
+- **Ordering:** favorites first, then recently used (`last_used_at`, set when a service is added to a
+  quote), then by name in Hebrew order. Filter by category or favorites.
+- **Search** is Hebrew-aware (`textMatches` in `packages/utils`): every word may match the name or
+  the category, niqqud is ignored, final letters match regular ones, and `מאמ״ת` matches `מאמ"ת`.
+- **Quick price edit:** tap the price, type, tap save.
+- **Starter price lists** live in `packages/types/src/starter-price-lists/*.json` (electricians for
+  now, prices before VAT). Business Setup offers to import it, and an empty price list imports it in
+  one tap. `import_starter_price_list()` is idempotent: each entry has a `starter_key`, so a second
+  import adds nothing, keeps edited prices and does not bring back deleted services.
+- **Delete** is a soft delete. Quote lines (`quote_item`) keep their own copy of the description,
+  unit and price, so existing quotes do not change. Deleting a category keeps its services, under
+  "no category".
+
 ## Quality checks
 
 The same commands run in CI (`.github/workflows/ci.yml`):

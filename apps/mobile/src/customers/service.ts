@@ -1,13 +1,7 @@
 import type { CustomerInput } from '@q2c/types';
 import type { ErrorKey } from '@q2c/ui';
+import { dbErrorKey, type DbError, type DbResult } from '../lib/db';
 import type { CustomerDetail, CustomerListItem } from './model';
-
-export interface DbError {
-  code?: string;
-  message: string;
-}
-
-export type DbResult<T> = { data: T; error: null } | { data: null; error: DbError };
 
 export interface CustomerRowWrite {
   id: string;
@@ -52,12 +46,6 @@ export type SaveResult =
   | { ok: false; error: ErrorKey };
 
 const UNIQUE_VIOLATION = '23505';
-
-export function dbErrorKey(error: DbError): ErrorKey {
-  if (error.code === '42501') return 'forbidden';
-  if (/network|fetch|timed? ?out|offline/i.test(error.message)) return 'offline_write';
-  return 'generic';
-}
 
 /**
  * Creates or updates a customer. A phone already used by another active
