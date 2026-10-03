@@ -1,0 +1,189 @@
+{
+  "version": 1,
+  "trade": "electrician",
+  "categories": [
+    {
+      "key": "el.points",
+      "name": "נקודות ושקעים",
+      "services": [
+        {
+          "key": "el.points.new_point",
+          "name": "נקודת חשמל חדשה",
+          "unit": "point",
+          "price_minor": 25000,
+          "vat_included": false
+        },
+        {
+          "key": "el.points.power_outlet",
+          "name": "שקע כוח 16A",
+          "unit": "point",
+          "price_minor": 35000,
+          "vat_included": false
+        },
+        {
+          "key": "el.points.replace_outlet",
+          "name": "החלפת שקע או מפסק",
+          "unit": "unit",
+          "price_minor": 8000,
+          "vat_included": false
+        },
+        {
+          "key": "el.points.usb_outlet",
+          "name": "שקע עם מטען USB",
+          "unit": "unit",
+          "price_minor": 15000,
+          "vat_included": false
+        },
+        {
+          "key": "el.points.cable",
+          "name": "הנחת כבל",
+          "unit": "meter",
+          "price_minor": 2500,
+          "vat_included": false
+        }
+      ]
+    },
+    {
+      "key": "el.lighting",
+      "name": "תאורה",
+      "services": [
+        {
+          "key": "el.lighting.fixture",
+          "name": "התקנת גוף תאורה",
+          "unit": "unit",
+          "price_minor": 15000,
+          "vat_included": false
+        },
+        {
+          "key": "el.lighting.spot",
+          "name": "ספוט שקוע",
+          "unit": "unit",
+          "price_minor": 9000,
+          "vat_included": false
+        },
+        {
+          "key": "el.lighting.ceiling_fan",
+          "name": "מאוורר תקרה",
+          "unit": "unit",
+          "price_minor": 35000,
+          "vat_included": false
+        },
+        {
+          "key": "el.lighting.led_strip",
+          "name": "פס לד",
+          "unit": "meter",
+          "price_minor": 6000,
+          "vat_included": false
+        }
+      ]
+    },
+    {
+      "key": "el.panel",
+      "name": "לוח חשמל",
+      "services": [
+        {
+          "key": "el.panel.replace",
+          "name": "החלפת לוח חשמל דירתי",
+          "unit": "job",
+          "price_minor": 350000,
+          "vat_included": false
+        },
+        {
+          "key": "el.panel.rcd",
+          "name": "מפסק פחת",
+          "unit": "unit",
+          "price_minor": 45000,
+          "vat_included": false
+        },
+        {
+          "key": "el.panel.breaker",
+          "name": "מאמ\"ת",
+          "unit": "unit",
+          "price_minor": 15000,
+          "vat_included": false
+        },
+        {
+          "key": "el.panel.new_circuit",
+          "name": "מעגל חשמלי חדש",
+          "unit": "unit",
+          "price_minor": 60000,
+          "vat_included": false
+        }
+      ]
+    },
+    {
+      "key": "el.repairs",
+      "name": "תקלות ותיקונים",
+      "services": [
+        {
+          "key": "el.repairs.visit",
+          "name": "ביקור ואבחון תקלה",
+          "unit": "job",
+          "price_minor": 25000,
+          "vat_included": false
+        },
+        {
+          "key": "el.repairs.hour",
+          "name": "שעת עבודה",
+          "unit": "hour",
+          "price_minor": 20000,
+          "vat_included": false
+        },
+        {
+          "key": "el.repairs.short",
+          "name": "איתור קצר",
+          "unit": "job",
+          "price_minor": 40000,
+          "vat_included": false
+        }
+      ]
+    },
+    {
+      "key": "el.appliances",
+      "name": "מזגנים ודוד",
+      "services": [
+        {
+          "key": "el.appliances.ac_prep",
+          "name": "הכנה למזגן",
+          "unit": "point",
+          "price_minor": 45000,
+          "vat_included": false
+        },
+        {
+          "key": "el.appliances.boiler_timer",
+          "name": "טיימר לדוד",
+          "unit": "unit",
+          "price_minor": 35000,
+          "vat_included": false
+        },
+        {
+          "key": "el.appliances.smart_switch",
+          "name": "מתג חכם לדוד",
+          "unit": "unit",
+          "price_minor": 45000,
+          "vat_included": false
+        }
+      ]
+    },
+    {
+      "key": "el.inspection",
+      "name": "בדיקות",
+      "services": [
+        {
+          "key": "el.inspection.installation",
+          "name": "בדיקת תקינות מתקן חשמלי",
+          "unit": "job",
+          "price_minor": 80000,
+          "vat_included": false
+        },
+        {
+          "key": "el.inspection.grounding",
+          "name": "בדיקת הארקה",
+          "unit": "job",
+          "price_minor": 40000,
+          "vat_included": false
+        }
+      ]
+    }
+  ]
+}

@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import type { BusinessTrade } from '@q2c/types';
 import type { Session } from '@supabase/supabase-js';
 import {
   createContext,
@@ -18,6 +19,7 @@ export interface CurrentBusiness {
   id: string;
   name: string;
   logoPath: string | null;
+  trade: BusinessTrade | null;
 }
 
 export type AuthState =
@@ -58,7 +60,7 @@ function configStatus(): 'ok' | 'config' | 'generic' {
 async function loadBusiness(userId: string, reload: number): Promise<BusinessLoad> {
   const { data, error } = await getSupabase()
     .from('business')
-    .select('id, name, logo_path')
+    .select('id, name, logo_path, trade')
     .is('deleted_at', null)
     .order('created_at')
     .limit(1)
@@ -71,7 +73,7 @@ async function loadBusiness(userId: string, reload: number): Promise<BusinessLoa
       : { userId, reload, kind: 'error', error: isNetworkError(error) ? 'network' : 'generic' };
   }
   if (!data) return { userId, reload, kind: 'none' };
-  const business = { id: data.id, name: data.name, logoPath: data.logo_path };
+  const business = { id: data.id, name: data.name, logoPath: data.logo_path, trade: data.trade };
   await cache.set(businessCacheKey(userId), business);
   return { userId, reload, kind: 'found', business };
 }

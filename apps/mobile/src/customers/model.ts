@@ -1,6 +1,6 @@
 import { CustomerSchema, QuickCustomerSchema, type CustomerInput } from '@q2c/types';
 import type { ErrorKey } from '@q2c/ui';
-import { phoneMatches } from '@q2c/utils';
+import { phoneMatches, searchText, textMatches } from '@q2c/utils';
 
 export interface CustomerListItem {
   id: string;
@@ -37,8 +37,6 @@ export interface CustomerDetail extends CustomerListItem {
   quotes: CustomerQuoteSummary[];
 }
 
-const normalize = (text: string) => text.trim().replace(/\s+/g, ' ').toLowerCase();
-
 /**
  * Search by name (every word must appear) or by any part of the phone number
  * in any common format. Keeps the incoming order (most recent first).
@@ -47,13 +45,8 @@ export function filterCustomers(
   customers: readonly CustomerListItem[],
   query: string,
 ): CustomerListItem[] {
-  const q = normalize(query);
-  if (!q) return [...customers];
-  const words = q.split(' ');
-  return customers.filter((c) => {
-    const name = normalize(c.fullName);
-    return words.every((w) => name.includes(w)) || phoneMatches(c.phone, q);
-  });
+  if (!searchText(query)) return [...customers];
+  return customers.filter((c) => textMatches(c.fullName, query) || phoneMatches(c.phone, query));
 }
 
 /** Prefill for "add customer" from a search that found nothing: digits go to phone, text to name. */

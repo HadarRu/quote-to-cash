@@ -77,7 +77,7 @@ begin
     insert into public.service_category (business_id, name) values (b.id, 'התקנות')
       returning id into v_category;
     insert into public.service (business_id, category_id, name, unit, default_price_minor)
-    values (b.id, v_category, 'התקנת שקע', 'יחידה', 25000) returning id into v_service;
+    values (b.id, v_category, 'התקנת שקע', 'point', 25000) returning id into v_service;
 
     -- 2 × ₪250.00 = ₪500.00, VAT 18% = ₪90.00, total ₪590.00
     insert into public.quote (business_id, customer_id, address_id, status, title, valid_until,
@@ -87,7 +87,7 @@ begin
     returning id into v_quote;
     insert into public.quote_item (business_id, quote_id, service_id, description, quantity, unit,
                                    unit_price_minor, line_total_minor)
-    values (b.id, v_quote, v_service, 'התקנת שקע', 2, 'יחידה', 25000, 50000);
+    values (b.id, v_quote, v_service, 'התקנת שקע', 2, 'point', 25000, 50000);
     insert into public.quote_slot_option (business_id, quote_id, starts_at, ends_at, status)
     values (b.id, v_quote, v_tomorrow_9, v_tomorrow_9 + interval '2 hours', 'selected');
 
@@ -105,7 +105,7 @@ begin
     returning id into v_invoice;
     insert into public.invoice_item (business_id, invoice_id, service_id, description, quantity, unit,
                                      unit_price_minor, line_total_minor)
-    values (b.id, v_invoice, v_service, 'התקנת שקע', 2, 'יחידה', 25000, 50000);
+    values (b.id, v_invoice, v_service, 'התקנת שקע', 2, 'point', 25000, 50000);
     insert into public.payment (business_id, invoice_id, amount_minor, method, status, paid_at)
     values (b.id, v_invoice, 59000, 'bit', 'succeeded', now());
 

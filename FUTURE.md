@@ -28,3 +28,5 @@ Ideas noted while building, intentionally **not** implemented yet.
   device.
 - Offline writes: queue customer edits made without a connection and sync them later.
 - Restore a soft-deleted customer; manage several addresses per customer from the form.
+- Starter price lists for more trades (plumbers, HVAC, handymen) and a yearly price-update helper.
+- Bulk price change (e.g. +5% for a category) and drag-to-reorder categories.

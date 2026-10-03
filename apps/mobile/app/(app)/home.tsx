@@ -41,6 +41,12 @@ export default function Home() {
             onPress={() => router.push('/customers')}
           />
           <Button
+            testID="home-price-list"
+            variant="secondary"
+            label={strings.appHome.priceList}
+            onPress={() => router.push('/price-list')}
+          />
+          <Button
             testID="home-settings"
             variant="secondary"
             label={strings.appHome.settings}

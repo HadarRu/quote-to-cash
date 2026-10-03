@@ -1,4 +1,4 @@
-import { Constants, type BusinessTrade, type TaxStatus } from '@q2c/types';
+import { Constants, getStarterPriceList, type BusinessTrade, type TaxStatus } from '@q2c/types';
 import { errorMessage, radius, space, strings } from '@q2c/ui';
 import { randomUUID } from 'expo-crypto';
 import * as ImagePicker from 'expo-image-picker';
@@ -18,6 +18,9 @@ import { Button } from '../src/components/Button';
 import { ChoiceChips } from '../src/components/ChoiceChips';
 import { Screen } from '../src/components/Screen';
 import { TextField } from '../src/components/TextField';
+import { Toggle } from '../src/components/Toggle';
+import { supabasePriceListDb } from '../src/price-list/db';
+import { importStarterPriceList } from '../src/price-list/service';
 import { getSupabase } from '../src/lib/supabase';
 import { useThemeColors } from '../src/theme';
 
@@ -49,6 +52,8 @@ export default function BusinessSetupScreen() {
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [importStarter, setImportStarter] = useState(true);
+  const starterAvailable = getStarterPriceList(trade) !== null;
 
   const pickLogo = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -78,11 +83,16 @@ export default function BusinessSetupScreen() {
     setFieldErrors({});
     setSubmitting(true);
     const result = await submitBusinessSetup(setupClient(getSupabase()), validation.data, logo);
-    setSubmitting(false);
     if (!result.ok) {
+      setSubmitting(false);
       setSubmitError(errorMessage(result.error));
       return;
     }
+    if (starterAvailable && importStarter) {
+      // Optional: on failure the price list screen offers the same import again.
+      await importStarterPriceList(supabasePriceListDb(getSupabase()), result.businessId, trade);
+    }
+    setSubmitting(false);
     // The router moves on to Home once the business is loaded.
     refreshBusiness();
   };
@@ -143,6 +153,14 @@ export default function BusinessSetupScreen() {
         }}
         error={fieldError('taxStatus')}
       />
+      {starterAvailable ? (
+        <Toggle
+          testID="setup-import-starter"
+          label={strings.priceList.starterOption}
+          value={importStarter}
+          onChange={setImportStarter}
+        />
+      ) : null}
       <View style={styles.logo}>
         <AppText variant="muted">{strings.setup.logoLabel}</AppText>
         <View style={styles.logoRow}>
