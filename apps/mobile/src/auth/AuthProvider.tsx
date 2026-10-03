@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { BusinessTrade } from '@q2c/types';
+import { businessVatRateBp, type BusinessTrade } from '@q2c/types';
 import type { Session } from '@supabase/supabase-js';
 import {
   createContext,
@@ -14,13 +14,18 @@ import { cache, ONBOARDING_SEEN_KEY } from '../lib/cache';
 import { ConfigError } from '../lib/config';
 import { isNetworkError } from '../lib/errors';
 import { getSupabase } from '../lib/supabase';
+import { clearQuotes } from '../quotes/sync';
 
 export interface CurrentBusiness {
   id: string;
   name: string;
   logoPath: string | null;
   trade: BusinessTrade | null;
+  /** VAT rate on quotes, in basis points (0 for an exempt dealer). */
+  vatRateBp: number;
 }
+
+const DEFAULT_VAT_RATE_BP = 1800;
 
 export type AuthState =
   | { status: 'loading' }
@@ -60,7 +65,7 @@ function configStatus(): 'ok' | 'config' | 'generic' {
 async function loadBusiness(userId: string, reload: number): Promise<BusinessLoad> {
   const { data, error } = await getSupabase()
     .from('business')
-    .select('id, name, logo_path, trade')
+    .select('id, name, logo_path, trade, tax_status, business_settings (vat_rate_bp)')
     .is('deleted_at', null)
     .order('created_at')
     .limit(1)
@@ -69,11 +74,28 @@ async function loadBusiness(userId: string, reload: number): Promise<BusinessLoa
     // Offline start: fall back to the last known business.
     const cached = await cache.get<CurrentBusiness>(businessCacheKey(userId));
     return cached
-      ? { userId, reload, kind: 'found', business: cached }
+      ? {
+          userId,
+          reload,
+          kind: 'found',
+          // Copies cached before vatRateBp existed.
+          business: { ...cached, vatRateBp: cached.vatRateBp ?? DEFAULT_VAT_RATE_BP },
+        }
       : { userId, reload, kind: 'error', error: isNetworkError(error) ? 'network' : 'generic' };
   }
   if (!data) return { userId, reload, kind: 'none' };
-  const business = { id: data.id, name: data.name, logoPath: data.logo_path, trade: data.trade };
+  const business: CurrentBusiness = {
+    id: data.id,
+    name: data.name,
+    logoPath: data.logo_path,
+    trade: data.trade,
+    vatRateBp: data.tax_status
+      ? businessVatRateBp(
+          data.tax_status,
+          data.business_settings?.vat_rate_bp ?? DEFAULT_VAT_RATE_BP,
+        )
+      : DEFAULT_VAT_RATE_BP,
+  };
   await cache.set(businessCacheKey(userId), business);
   return { userId, reload, kind: 'found', business };
 }
@@ -139,6 +161,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Offline: the server-side revoke failed, but the device must still forget the session.
     if (error) await supabase.auth.signOut({ scope: 'local' });
     await cache.clear();
+    await clearQuotes().catch(() => undefined);
   }, []);
 
   const value = useMemo<AuthContextValue>(

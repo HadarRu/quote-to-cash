@@ -15,7 +15,7 @@
       "package": "com.quotetocash.app"
     },
     "web": {
-      "output": "static",
+      "output": "single",
       "bundler": "metro"
     },
     "plugins": ["expo-router", "expo-font", "expo-localization"],

@@ -30,3 +30,13 @@ Ideas noted while building, intentionally **not** implemented yet.
 - Restore a soft-deleted customer; manage several addresses per customer from the form.
 - Starter price lists for more trades (plumbers, HVAC, handymen) and a yearly price-update helper.
 - Bulk price change (e.g. +5% for a category) and drag-to-reorder categories.
+- Quotes: carry photos into a new revision (today a revision starts without the old photos).
+- Quotes: "send the link again" from another device (rotate the customer token on request; today the
+  link is shown only on the device that sent it).
+- Quotes: pick the validity date in the editor (today it comes from `quote_valid_days`).
+- Quotes: line reordering, per-line discounts, and templates of common quotes.
+- Quotes: warn before signing out while the outbox still holds unsent changes.
+- Quotes: copy photos taken offline into app storage on native instead of keeping them as base64 in
+  SQLite.
+- A scheduled job that marks open quotes EXPIRED in the database (the app derives it from the
+  token expiry today).

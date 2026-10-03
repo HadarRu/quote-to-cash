@@ -162,6 +162,49 @@ Categories and services in `apps/mobile/app/(app)/price-list`:
   unit and price, so existing quotes do not change. Deleting a category keeps its services, under
   "no category".
 
+## Quotes
+
+Create, send, revise and cancel quotes in `apps/mobile/app/(app)/quotes` (Home → "הצעת מחיר
+חדשה", or from a customer's page).
+
+- **Editor:** one screen with collapsible sections (customer, services, notes, photos) and a
+  floating total. Services come from the price list (favorites, recently used, search) or as a
+  free-form line; quantity allows up to 3 decimals; the discount is a percent or an amount. Every
+  change is saved on the device right away and queued for the server (auto-save).
+- **Totals** are computed by `computeQuoteTotals` in `packages/utils` (integer agorot, half away
+  from zero, VAT-inclusive prices keep their exact gross; an exempt dealer charges no VAT). The app
+  shows them live; the server recomputes them when sending, and those are stored.
+- **Photos** are taken or picked, compressed on the device (JPEG, max 1600px wide) and uploaded in
+  the background to the private `quote-photos` bucket (`<business>/quotes/<quote>/<photo>.jpg`) with
+  a `file` row each.
+- **Preview** shows the quote as the customer will see it. **Send** calls the `quotes` Edge
+  Function (`POST /quotes/:id/send` with a `sendKey`), which checks the quote is a DRAFT,
+  recomputes the totals, freezes a snapshot (business, customer, lines, totals, photos), creates a
+  32-byte random token (only its HMAC with `TOKEN_PEPPER` is stored, with an expiry from the
+  validity date or `quote_valid_days`) and lets `send_quote()` assign the next number under a lock.
+  It returns the customer link (`PUBLIC_APP_URL/quote/<token>`) and a `wa.me` link with a Hebrew
+  message. Retrying with the same `sendKey` returns the same number (never a second one).
+- **Rules (database-enforced):** only drafts can be edited; status, number, token and snapshot
+  change only through `send_quote` / `revise_quote` / `cancel_quote`. **Revise** copies a sent
+  quote into a new draft revision; the old one becomes SUPERSEDED and its link is revoked.
+  **Cancel** works on drafts and open quotes and revokes the link.
+- **Offline:** quotes live in SQLite on the device (`expo-sqlite`, `src/quotes/store.ts`) with an
+  outbox of changes (`src/quotes/outbox.ts`). The outbox is replayed on start, when the connection
+  returns and with exponential backoff; every server call is idempotent (draft upserts by
+  client-generated ids, sends by `sendKey`). A quote sent offline shows "ממתינה לשליחה" and becomes
+  SENT only after the server confirms. A draft changed on another device after it was sent there
+  takes the server's version.
+- **Quotes list** filters by status; **details** show the customer's version, the history
+  (created, sent, viewed, approved/rejected, cancelled, superseded, expired) and Revise / Cancel.
+
+**Edge Function secrets:** `TOKEN_PEPPER` (a long random string) and `PUBLIC_APP_URL` must be set
+for the `quotes` function (`pnpm exec supabase secrets set TOKEN_PEPPER=… PUBLIC_APP_URL=…` on the
+hosted project; `pnpm exec supabase functions serve --env-file .env` locally). Deploy with
+`pnpm exec supabase functions deploy quotes`.
+
+**Web build:** the mobile web build is a single-page app (`web.output: "single"`); a host must
+serve `index.html` for every path.
+
 ## Quality checks
 
 The same commands run in CI (`.github/workflows/ci.yml`):
@@ -214,7 +257,7 @@ See `.env.example`. Secrets are never committed.
 - **Mobile**: `app.json` sets `extra.supportsRTL` / `extra.forcesRTL` (native builds start in RTL);
   `forceRtl()` in `apps/mobile/src/rtl.ts` also calls `I18nManager.forceRTL(true)` for Expo Go and dev
   clients. In Expo Go, the first launch may need one reload before RTL takes effect.
-  The mobile web build sets `dir="rtl"` in `apps/mobile/app/+html.tsx`.
+  The mobile web build sets `dir="rtl"` in `apps/mobile/public/index.html`.
 - The home screen of both apps shows the 7 flow steps; step 1 must render on the **right**.
 
 ## Design tokens

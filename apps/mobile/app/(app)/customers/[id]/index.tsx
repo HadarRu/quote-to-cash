@@ -1,8 +1,15 @@
 import { errorMessage, format, radius, space, strings } from '@q2c/ui';
-import { formatDateIL, formatMoney, formatPhoneIL, telUrl, whatsappUrl } from '@q2c/utils';
+import {
+  formatAddressLine,
+  formatDateIL,
+  formatMoney,
+  formatPhoneIL,
+  telUrl,
+  whatsappUrl,
+} from '@q2c/utils';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useMemo, useState, type ReactNode } from 'react';
-import { ActivityIndicator, Linking, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Linking, Pressable, StyleSheet, View } from 'react-native';
 import { AppText } from '../../../../src/components/AppText';
 import { Banner } from '../../../../src/components/Banner';
 import { Button } from '../../../../src/components/Button';
@@ -126,6 +133,23 @@ export default function CustomerDetails() {
         )}
       </Section>
 
+      {deleted ? null : (
+        <Button
+          testID="customer-new-quote"
+          label={strings.customers.newQuote}
+          onPress={() =>
+            router.push({
+              pathname: '/quotes/new',
+              params: {
+                customerId: customer.id,
+                customerName: customer.fullName,
+                customerPhone: customer.phone,
+              },
+            })
+          }
+        />
+      )}
+
       <Section title={strings.customers.quotes}>
         {customer.quotes.length === 0 ? (
           <AppText variant="muted" testID="customer-no-quotes">
@@ -196,13 +220,7 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 }
 
 function AddressLine({ address }: { address: CustomerAddress }) {
-  const line = [
-    [address.street, address.houseNumber].filter(Boolean).join(' '),
-    address.apartment ? `${strings.customers.apartmentLabel} ${address.apartment}` : null,
-    address.city,
-  ]
-    .filter(Boolean)
-    .join(', ');
+  const line = formatAddressLine(address, strings.customers.apartmentLabel);
   return (
     <View style={styles.line}>
       <AppText>{address.isPrimary ? `${line} · ${strings.customers.primary}` : line}</AppText>
@@ -214,16 +232,25 @@ function AddressLine({ address }: { address: CustomerAddress }) {
 function QuoteLine({ quote }: { quote: CustomerQuoteSummary }) {
   const status = (strings.quoteStatus as Record<string, string>)[quote.status] ?? quote.status;
   return (
-    <View style={styles.quote} testID="customer-quote">
+    <Pressable
+      style={styles.quote}
+      testID="customer-quote"
+      accessibilityRole="button"
+      onPress={() => router.push({ pathname: '/quotes/[id]', params: { id: quote.id } })}
+    >
       <View style={styles.line}>
-        <AppText>{format(strings.customers.quoteNumber, { number: quote.quoteNumber })}</AppText>
+        <AppText>
+          {quote.quoteNumber === null
+            ? strings.quotes.draftLabel
+            : format(strings.customers.quoteNumber, { number: quote.quoteNumber })}
+        </AppText>
         {quote.title ? <AppText variant="muted">{quote.title}</AppText> : null}
       </View>
       <View style={styles.quoteMeta}>
         <AppText>{formatMoney(quote.totalMinor)}</AppText>
         <AppText variant="muted">{`${status} · ${formatDateIL(quote.createdAt)}`}</AppText>
       </View>
-    </View>
+    </Pressable>
   );
 }
 

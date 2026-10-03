@@ -7,27 +7,29 @@ create schema tests;
 
 -- Every table scoped to a business, the column that holds the business id, and
 -- whether members may UPDATE their own rows (positive control).
-create table tests.tenant_table (name text primary key, key_col text not null, updatable boolean not null);
-insert into tests.tenant_table values
-  ('business', 'id', true),
-  ('business_member', 'business_id', true),
-  ('business_settings', 'business_id', true),
-  ('customer', 'business_id', true),
-  ('customer_address', 'business_id', true),
-  ('service_category', 'business_id', true),
-  ('service', 'business_id', true),
-  ('quote', 'business_id', true),
-  ('quote_item', 'business_id', true),
-  ('quote_slot_option', 'business_id', true),
-  ('appointment', 'business_id', true),
-  ('job', 'business_id', true),
-  ('invoice', 'business_id', true),
-  ('invoice_item', 'business_id', true),
-  ('payment', 'business_id', true),
-  ('notification', 'business_id', true),
-  ('subscription', 'business_id', false),
-  ('audit_log', 'business_id', false),
-  ('file', 'business_id', true);
+-- update_col: the column the UPDATE checks write (defaults to key_col); quote
+-- grants clients UPDATE only on its content columns.
+create table tests.tenant_table (name text primary key, key_col text not null, updatable boolean not null, update_col text);
+insert into tests.tenant_table (name, key_col, updatable, update_col) values
+  ('business', 'id', true, null),
+  ('business_member', 'business_id', true, null),
+  ('business_settings', 'business_id', true, null),
+  ('customer', 'business_id', true, null),
+  ('customer_address', 'business_id', true, null),
+  ('service_category', 'business_id', true, null),
+  ('service', 'business_id', true, null),
+  ('quote', 'business_id', true, 'notes'),
+  ('quote_item', 'business_id', true, null),
+  ('quote_slot_option', 'business_id', true, null),
+  ('appointment', 'business_id', true, null),
+  ('job', 'business_id', true, null),
+  ('invoice', 'business_id', true, null),
+  ('invoice_item', 'business_id', true, null),
+  ('payment', 'business_id', true, null),
+  ('notification', 'business_id', true, null),
+  ('subscription', 'business_id', false, null),
+  ('audit_log', 'business_id', false, null),
+  ('file', 'business_id', true, null);
 
 create table tests.ids (name text primary key, id uuid not null);
 insert into tests.ids values
@@ -163,8 +165,8 @@ select is(
 -- has no UPDATE privilege at all, so the statement itself is refused.
 select is(
   tests.result_as(tests.id('owner_a'),
-    format('with u as (update public.%1$I set %2$I = %2$I where %2$I = %3$L returning 1) select count(*) from u',
-           t.name, t.key_col, tests.id('business_b'))),
+    format('with u as (update public.%1$I set %4$I = %4$I where %2$I = %3$L returning 1) select count(*) from u',
+           t.name, t.key_col, tests.id('business_b'), coalesce(t.update_col, t.key_col))),
   case when t.name = 'audit_log' then 'ERROR 42501' else '0' end,
   format('%s: owner of A cannot update B rows', t.name)
 ) from tests.tenant_table t order by t.name;
@@ -172,8 +174,8 @@ select is(
 -- Positive control: the same UPDATE works on A's own rows.
 select cmp_ok(
   tests.count_as(tests.id('owner_a'),
-    format('with u as (update public.%1$I set %2$I = %2$I where %2$I = %3$L returning 1) select count(*) from u',
-           t.name, t.key_col, tests.id('business_a'))),
+    format('with u as (update public.%1$I set %4$I = %4$I where %2$I = %3$L returning 1) select count(*) from u',
+           t.name, t.key_col, tests.id('business_a'), coalesce(t.update_col, t.key_col))),
   '>', 0::bigint,
   format('%s: owner of A can update A rows', t.name)
 ) from tests.tenant_table t where t.updatable order by t.name;

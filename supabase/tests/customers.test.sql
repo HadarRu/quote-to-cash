@@ -34,9 +34,10 @@ select throws_ok(
 select is(
   (select count(*) from public.quote q
      join public.customer c on c.business_id = q.business_id and c.id = q.customer_id
-   where c.business_id = '10000000-0000-4000-a000-000000000001' and c.phone_e164 = '+972521111111'),
+   where c.business_id = '10000000-0000-4000-a000-000000000001' and c.phone_e164 = '+972521111111'
+     and q.quote_number is not null),
   1::bigint,
-  'precondition: the seed customer has a quote'
+  'precondition: the seed customer has a sent quote'
 );
 
 update public.customer set deleted_at = now()
@@ -52,7 +53,8 @@ select results_eq(
   $$ select q.quote_number, q.total_minor, c.full_name, c.deleted_at is not null
      from public.quote q
      join public.customer c on c.business_id = q.business_id and c.id = q.customer_id
-     where c.business_id = '10000000-0000-4000-a000-000000000001' and c.phone_e164 = '+972521111111' $$,
+     where c.business_id = '10000000-0000-4000-a000-000000000001' and c.phone_e164 = '+972521111111'
+       and q.quote_number is not null $$,
   $$ values (1, 59000::bigint, 'משה ישראלי', true) $$,
   'after a soft delete the customer''s quotes, with the customer''s name, are still readable'
 );

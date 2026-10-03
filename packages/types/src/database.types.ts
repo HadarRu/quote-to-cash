@@ -851,19 +851,30 @@ export type Database = {
           address_id: string | null;
           approved_at: string | null;
           business_id: string;
+          cancelled_at: string | null;
           created_at: string;
           customer_id: string;
           deleted_at: string | null;
           discount_minor: number;
+          discount_type: string;
+          discount_value: number;
           id: string;
           notes: string | null;
-          quote_number: number;
+          quote_number: number | null;
           rejected_at: string | null;
+          revision: number;
+          root_quote_id: string | null;
+          send_key: string | null;
           sent_at: string | null;
+          sent_snapshot: Json | null;
           status: Database['public']['Enums']['quote_status'];
           subtotal_minor: number;
+          superseded_at: string | null;
+          supersedes_quote_id: string | null;
           title: string | null;
+          token_expires_at: string | null;
           token_hash: string | null;
+          token_revoked_at: string | null;
           total_minor: number;
           updated_at: string;
           valid_until: string | null;
@@ -875,19 +886,30 @@ export type Database = {
           address_id?: string | null;
           approved_at?: string | null;
           business_id: string;
+          cancelled_at?: string | null;
           created_at?: string;
           customer_id: string;
           deleted_at?: string | null;
           discount_minor?: number;
+          discount_type?: string;
+          discount_value?: number;
           id?: string;
           notes?: string | null;
-          quote_number?: number;
+          quote_number?: number | null;
           rejected_at?: string | null;
+          revision?: number;
+          root_quote_id?: string | null;
+          send_key?: string | null;
           sent_at?: string | null;
+          sent_snapshot?: Json | null;
           status?: Database['public']['Enums']['quote_status'];
           subtotal_minor?: number;
+          superseded_at?: string | null;
+          supersedes_quote_id?: string | null;
           title?: string | null;
+          token_expires_at?: string | null;
           token_hash?: string | null;
+          token_revoked_at?: string | null;
           total_minor?: number;
           updated_at?: string;
           valid_until?: string | null;
@@ -899,19 +921,30 @@ export type Database = {
           address_id?: string | null;
           approved_at?: string | null;
           business_id?: string;
+          cancelled_at?: string | null;
           created_at?: string;
           customer_id?: string;
           deleted_at?: string | null;
           discount_minor?: number;
+          discount_type?: string;
+          discount_value?: number;
           id?: string;
           notes?: string | null;
-          quote_number?: number;
+          quote_number?: number | null;
           rejected_at?: string | null;
+          revision?: number;
+          root_quote_id?: string | null;
+          send_key?: string | null;
           sent_at?: string | null;
+          sent_snapshot?: Json | null;
           status?: Database['public']['Enums']['quote_status'];
           subtotal_minor?: number;
+          superseded_at?: string | null;
+          supersedes_quote_id?: string | null;
           title?: string | null;
+          token_expires_at?: string | null;
           token_hash?: string | null;
+          token_revoked_at?: string | null;
           total_minor?: number;
           updated_at?: string;
           valid_until?: string | null;
@@ -941,6 +974,20 @@ export type Database = {
             referencedRelation: 'business';
             referencedColumns: ['id'];
           },
+          {
+            foreignKeyName: 'quote_root_fk';
+            columns: ['business_id', 'root_quote_id'];
+            isOneToOne: false;
+            referencedRelation: 'quote';
+            referencedColumns: ['business_id', 'id'];
+          },
+          {
+            foreignKeyName: 'quote_supersedes_fk';
+            columns: ['business_id', 'supersedes_quote_id'];
+            isOneToOne: false;
+            referencedRelation: 'quote';
+            referencedColumns: ['business_id', 'id'];
+          },
         ];
       };
       quote_item: {
@@ -958,6 +1005,7 @@ export type Database = {
           unit: string;
           unit_price_minor: number;
           updated_at: string;
+          vat_included: boolean;
         };
         Insert: {
           business_id: string;
@@ -973,6 +1021,7 @@ export type Database = {
           unit?: string;
           unit_price_minor: number;
           updated_at?: string;
+          vat_included?: boolean;
         };
         Update: {
           business_id?: string;
@@ -988,6 +1037,7 @@ export type Database = {
           unit?: string;
           unit_price_minor?: number;
           updated_at?: string;
+          vat_included?: boolean;
         };
         Relationships: [
           {
@@ -1265,8 +1315,28 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      cancel_quote: { Args: { p_quote_id: string }; Returns: undefined };
       create_business: { Args: { p_name: string }; Returns: string };
       import_starter_price_list: { Args: { p_business_id: string; p_list: Json }; Returns: number };
+      revise_quote: { Args: { p_new_quote_id: string; p_quote_id: string }; Returns: string };
+      save_quote_draft: { Args: { p_quote: Json }; Returns: undefined };
+      send_quote: {
+        Args: {
+          p_quote_id: string;
+          p_send_key: string;
+          p_snapshot: Json;
+          p_token_expires_at: string;
+          p_token_hash: string;
+          p_totals: Json;
+          p_user_id: string;
+        };
+        Returns: {
+          already_sent: boolean;
+          quote_number: number;
+          sent_at: string;
+          token_stored: boolean;
+        }[];
+      };
       setup_business: {
         Args: {
           p_business_id: string;
@@ -1293,7 +1363,15 @@ export type Database = {
         'cash' | 'bank_transfer' | 'credit_card' | 'bit' | 'paybox' | 'check' | 'other';
       payment_status: 'pending' | 'succeeded' | 'failed' | 'refunded';
       quote_slot_option_status: 'offered' | 'selected' | 'declined';
-      quote_status: 'draft' | 'sent' | 'viewed' | 'approved' | 'rejected' | 'expired' | 'cancelled';
+      quote_status:
+        | 'draft'
+        | 'sent'
+        | 'viewed'
+        | 'approved'
+        | 'rejected'
+        | 'expired'
+        | 'cancelled'
+        | 'superseded';
       subscription_status: 'trialing' | 'active' | 'past_due' | 'cancelled' | 'expired';
       tax_status: 'osek_patur' | 'osek_murshe' | 'company';
     };
@@ -1428,7 +1506,16 @@ export const Constants = {
       payment_method: ['cash', 'bank_transfer', 'credit_card', 'bit', 'paybox', 'check', 'other'],
       payment_status: ['pending', 'succeeded', 'failed', 'refunded'],
       quote_slot_option_status: ['offered', 'selected', 'declined'],
-      quote_status: ['draft', 'sent', 'viewed', 'approved', 'rejected', 'expired', 'cancelled'],
+      quote_status: [
+        'draft',
+        'sent',
+        'viewed',
+        'approved',
+        'rejected',
+        'expired',
+        'cancelled',
+        'superseded',
+      ],
       subscription_status: ['trialing', 'active', 'past_due', 'cancelled', 'expired'],
       tax_status: ['osek_patur', 'osek_murshe', 'company'],
     },

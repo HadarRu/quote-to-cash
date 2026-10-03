@@ -58,23 +58,22 @@ select throws_ok(
   'audit_log: DELETE is refused for members'
 );
 
--- Quote numbers come from the business counter, whatever the client sends.
-insert into public.quote (id, business_id, customer_id, quote_number)
-select '30000000-0000-4000-a000-000000000001', business_id, id, 999 from public.customer
-where business_id = '10000000-0000-4000-a000-000000000001';
-
-select is(
-  (select quote_number from public.quote where id = '30000000-0000-4000-a000-000000000001'),
-  2,
-  'quote_number is assigned by the server (seed used 1; client-sent 999 is ignored)'
+-- Quote numbers are assigned by the server when a quote is sent, never by a client.
+select throws_ok(
+  $$ insert into public.quote (business_id, customer_id, quote_number)
+     select business_id, id, 999 from public.customer where business_id = '10000000-0000-4000-a000-000000000001' $$,
+  '42501', null,
+  'a client cannot choose a quote number'
 );
 
-update public.quote set quote_number = 500 where id = '30000000-0000-4000-a000-000000000001';
+insert into public.quote (id, business_id, customer_id)
+select '30000000-0000-4000-a000-000000000001', business_id, id from public.customer
+where business_id = '10000000-0000-4000-a000-000000000001';
 
-select is(
-  (select quote_number from public.quote where id = '30000000-0000-4000-a000-000000000001'),
-  2,
-  'quote_number cannot be changed after insert'
+select results_eq(
+  $$ select status::text, quote_number from public.quote where id = '30000000-0000-4000-a000-000000000001' $$,
+  $$ values ('draft', null::integer) $$,
+  'a new quote is a draft without a number'
 );
 
 -- create_business makes the caller the OWNER of a new tenant.
