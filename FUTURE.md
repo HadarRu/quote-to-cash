@@ -40,3 +40,12 @@ Ideas noted while building, intentionally **not** implemented yet.
   SQLite.
 - A scheduled job that marks open quotes EXPIRED in the database (the app derives it from the
   token expiry today).
+- Customer page: notify the business (push / WhatsApp) when a quote is viewed, approved, rejected or
+  commented on, and show customer comments in the app with replies.
+- Customer page: let the customer pick one of the offered time slots (`quote_slot_option`) when
+  approving.
+- PDF: store the approved quote's PDF in Storage (`file.kind`) instead of rendering on every download,
+  and package Chromium for the serverless host.
+- A strict Content-Security-Policy with nonces for the web app.
+- Rate limits keyed by a trusted client IP header from the host, and a separate budget for the PDF
+  renderer (its page loads come from the server's address).

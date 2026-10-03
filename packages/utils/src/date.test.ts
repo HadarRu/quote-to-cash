@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { addDays, dateInJerusalem, endOfDayInJerusalem, formatDateIL } from './date.ts';
+import {
+  addDays,
+  dateInJerusalem,
+  endOfDayInJerusalem,
+  formatDateIL,
+  formatDateTimeIL,
+} from './date.ts';
 
 describe('formatDateIL', () => {
   it('shows the calendar date in Israel, not in UTC', () => {
@@ -24,5 +30,11 @@ describe('Jerusalem calendar days', () => {
     // Summer (IDT, UTC+3) and winter (IST, UTC+2).
     expect(endOfDayInJerusalem('2026-07-01').toISOString()).toBe('2026-07-01T20:59:59.000Z');
     expect(endOfDayInJerusalem('2026-12-01').toISOString()).toBe('2026-12-01T21:59:59.000Z');
+  });
+});
+
+describe('formatDateTimeIL', () => {
+  it('shows Israel time', () => {
+    expect(formatDateTimeIL('2026-10-02T22:30:00Z')).toBe('03.10.2026, 01:30');
   });
 });

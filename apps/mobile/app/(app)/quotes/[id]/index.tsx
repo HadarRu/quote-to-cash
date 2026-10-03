@@ -1,6 +1,6 @@
 import { canQuote } from '@q2c/types';
 import { errorMessage, format, radius, space, strings } from '@q2c/ui';
-import { DISPLAY_TIME_ZONE } from '@q2c/utils';
+import { formatDateTimeIL } from '@q2c/utils';
 import { randomUUID } from 'expo-crypto';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
@@ -28,15 +28,6 @@ import {
   syncQuotes,
 } from '../../../../src/quotes/sync';
 import { useThemeColors } from '../../../../src/theme';
-
-const timeFormatter = new Intl.DateTimeFormat('he-IL', {
-  timeZone: DISPLAY_TIME_ZONE,
-  day: '2-digit',
-  month: '2-digit',
-  year: 'numeric',
-  hour: '2-digit',
-  minute: '2-digit',
-});
 
 const eventLabels: Record<TimelineEvent, string> = {
   created: strings.quotes.eventCreated,
@@ -201,7 +192,7 @@ function Details({ quote }: { quote: QuoteListItem }) {
           <View key={e.event} style={styles.event} testID={`quote-event-${e.event}`}>
             <View style={[styles.dot, { backgroundColor: colors.primary }]} />
             <AppText style={styles.grow}>{eventLabels[e.event]}</AppText>
-            <AppText variant="muted">{timeFormatter.format(new Date(e.at))}</AppText>
+            <AppText variant="muted">{formatDateTimeIL(e.at)}</AppText>
           </View>
         ))}
       </View>

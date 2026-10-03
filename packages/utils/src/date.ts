@@ -13,6 +13,20 @@ export function formatDateIL(isoUtc: string): string {
   return dateFormatter.format(new Date(isoUtc));
 }
 
+const dateTimeFormatter = new Intl.DateTimeFormat('he-IL', {
+  timeZone: DISPLAY_TIME_ZONE,
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+});
+
+/** Formats a UTC timestamp as Israeli date and time, e.g. "03.10.2026, 22:17". */
+export function formatDateTimeIL(isoUtc: string): string {
+  return dateTimeFormatter.format(new Date(isoUtc));
+}
+
 const partsFormatter = new Intl.DateTimeFormat('en-CA', {
   timeZone: DISPLAY_TIME_ZONE,
   year: 'numeric',

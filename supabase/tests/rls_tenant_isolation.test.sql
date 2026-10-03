@@ -21,6 +21,7 @@ insert into tests.tenant_table (name, key_col, updatable, update_col) values
   ('quote', 'business_id', true, 'notes'),
   ('quote_item', 'business_id', true, null),
   ('quote_slot_option', 'business_id', true, null),
+  ('quote_comment', 'business_id', true, null),
   ('appointment', 'business_id', true, null),
   ('job', 'business_id', true, null),
   ('invoice', 'business_id', true, null),

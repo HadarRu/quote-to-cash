@@ -1,6 +1,7 @@
 import {
   businessVatRateBp,
   SendQuoteRequestSchema,
+  type QuoteSnapshot,
   type SendQuoteResponse,
   type TaxStatus,
 } from '@q2c/types';
@@ -15,6 +16,9 @@ import {
   type DiscountType,
 } from '@q2c/utils';
 import { corsHeaders, json } from '../_shared/http.ts';
+import { hashToken, newToken } from '../_shared/token.ts';
+
+export { hashToken };
 
 /** A quote with everything the customer will see, as read with the caller's JWT (RLS). */
 export interface QuoteForSend {
@@ -61,7 +65,7 @@ export interface SendQuoteArgs {
   p_token_hash: string;
   p_token_expires_at: string;
   p_totals: Record<string, number>;
-  p_snapshot: Record<string, unknown>;
+  p_snapshot: QuoteSnapshot;
 }
 
 export interface SendQuoteRow {
@@ -92,30 +96,6 @@ export interface Deps {
 
 const SEND_PATH =
   /\/quotes\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/send\/?$/i;
-const TOKEN_BYTES = 32;
-
-function base64Url(bytes: Uint8Array): string {
-  let binary = '';
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-
-/** HMAC-SHA256(pepper, token) as hex: what the database stores instead of the token. */
-export async function hashToken(token: string, pepper: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const key = await crypto.subtle.importKey(
-    'raw',
-    encoder.encode(pepper),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign'],
-  );
-  const signature = new Uint8Array(await crypto.subtle.sign('HMAC', key, encoder.encode(token)));
-  return Array.from(signature, (b) => b.toString(16).padStart(2, '0')).join('');
-}
-
-const defaultRandomBytes = (length: number) => crypto.getRandomValues(new Uint8Array(length));
-
 /**
  * POST /quotes/:id/send { sendKey } -> SendQuoteResponse
  *
@@ -179,10 +159,10 @@ export async function handleQuotes(req: Request, deps: Deps): Promise<Response> 
   if (validUntil < today) return json(422, { error: 'quote_valid_until_past' });
   const expiresAt = endOfDayInJerusalem(validUntil);
 
-  const token = base64Url((deps.randomBytes ?? defaultRandomBytes)(TOKEN_BYTES));
+  const token = newToken(deps.randomBytes);
   const tokenHash = await hashToken(token, deps.tokenPepper);
 
-  const snapshot = {
+  const snapshot: QuoteSnapshot = {
     revision: quote.revision,
     title: quote.title,
     notes: quote.notes,
@@ -206,7 +186,7 @@ export async function handleQuotes(req: Request, deps: Deps): Promise<Response> 
       unit: item.unit,
       unit_price_minor: item.unitPriceMinor,
       vat_included: item.vatIncluded,
-      line_total_minor: totals.lineTotalsMinor[i],
+      line_total_minor: totals.lineTotalsMinor[i]!,
     })),
     discount_type: quote.discountType,
     discount_value: quote.discountValue,

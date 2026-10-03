@@ -128,3 +128,213 @@ h2 {
   gap: calc(var(--space) * 2);
   text-align: center;
 }
+
+/* ------------------------------------------------------------------ public quote page */
+.small {
+  font-size: 14px;
+}
+
+.button-secondary {
+  background: transparent;
+  color: var(--color-primary);
+  border: 1px solid var(--color-primary);
+}
+
+.button-ghost {
+  background: transparent;
+  color: var(--color-primary);
+}
+
+.button:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space) / 2);
+}
+
+.field input,
+.field textarea {
+  min-height: var(--touch-target);
+  padding: var(--space) calc(var(--space) * 1.5);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+}
+
+.error {
+  color: var(--color-danger);
+}
+
+.success,
+.notice {
+  color: var(--color-success);
+}
+
+.notice {
+  padding: calc(var(--space) * 1.5);
+  border: 1px solid var(--color-success);
+  border-radius: var(--radius);
+}
+
+.spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--color-border);
+  border-top-color: var(--color-primary);
+  border-radius: 9999px;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.quote {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space) * 2);
+}
+
+.quote-header {
+  flex-direction: row;
+  align-items: center;
+  gap: calc(var(--space) * 2);
+}
+
+.quote-logo {
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+  border-radius: var(--radius);
+}
+
+.quote-business {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space) / 2);
+}
+
+.quote-customer {
+  display: flex;
+  flex-direction: column;
+}
+
+/* LTR numbers and addresses stay on the reading side of an RTL column. */
+.quote-customer .ltr {
+  align-self: flex-start;
+}
+
+.quote-subject {
+  font-weight: 600;
+}
+
+.quote-items {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.quote-items th,
+.quote-items td {
+  padding: var(--space) calc(var(--space) / 2);
+  border-bottom: 1px solid var(--color-border);
+  text-align: start;
+  vertical-align: top;
+}
+
+.quote-items th {
+  color: var(--color-text-muted);
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.quote-items .num {
+  white-space: nowrap;
+  text-align: end;
+}
+
+.quote-totals {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space) / 2);
+}
+
+.quote-totals dd {
+  margin: 0;
+}
+
+.quote-total {
+  padding-top: var(--space);
+  border-top: 1px solid var(--color-border);
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.quote-notes {
+  white-space: pre-wrap;
+}
+
+.quote-photos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: var(--space);
+}
+
+.quote-photos img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: var(--radius);
+}
+
+.quote-approval {
+  border-color: var(--color-success);
+}
+
+/* Narrow phones: the items table becomes stacked rows. */
+@media (max-width: 420px) {
+  .quote-items thead {
+    display: none;
+  }
+  .quote-items tr {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    column-gap: calc(var(--space) * 2);
+    border-bottom: 1px solid var(--color-border);
+    padding-block: var(--space);
+  }
+  .quote-items td {
+    border: 0;
+    padding: 2px 0;
+  }
+  .quote-items td:first-child {
+    grid-column: 1 / -1;
+  }
+  .quote-items td:nth-child(3) {
+    display: none;
+  }
+}
+
+@media print {
+  :root {
+    color-scheme: light;
+  }
+  body {
+    background: #fff;
+  }
+  .container {
+    max-width: none;
+    padding: 0;
+  }
+  .card {
+    break-inside: avoid;
+  }
+}

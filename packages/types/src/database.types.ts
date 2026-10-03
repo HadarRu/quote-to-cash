@@ -850,6 +850,8 @@ export type Database = {
         Row: {
           address_id: string | null;
           approved_at: string | null;
+          approved_ip: unknown;
+          approved_name: string | null;
           business_id: string;
           cancelled_at: string | null;
           created_at: string;
@@ -862,6 +864,8 @@ export type Database = {
           notes: string | null;
           quote_number: number | null;
           rejected_at: string | null;
+          rejected_ip: unknown;
+          rejected_reason: string | null;
           revision: number;
           root_quote_id: string | null;
           send_key: string | null;
@@ -885,6 +889,8 @@ export type Database = {
         Insert: {
           address_id?: string | null;
           approved_at?: string | null;
+          approved_ip?: unknown;
+          approved_name?: string | null;
           business_id: string;
           cancelled_at?: string | null;
           created_at?: string;
@@ -897,6 +903,8 @@ export type Database = {
           notes?: string | null;
           quote_number?: number | null;
           rejected_at?: string | null;
+          rejected_ip?: unknown;
+          rejected_reason?: string | null;
           revision?: number;
           root_quote_id?: string | null;
           send_key?: string | null;
@@ -920,6 +928,8 @@ export type Database = {
         Update: {
           address_id?: string | null;
           approved_at?: string | null;
+          approved_ip?: unknown;
+          approved_name?: string | null;
           business_id?: string;
           cancelled_at?: string | null;
           created_at?: string;
@@ -932,6 +942,8 @@ export type Database = {
           notes?: string | null;
           quote_number?: number | null;
           rejected_at?: string | null;
+          rejected_ip?: unknown;
+          rejected_reason?: string | null;
           revision?: number;
           root_quote_id?: string | null;
           send_key?: string | null;
@@ -984,6 +996,57 @@ export type Database = {
           {
             foreignKeyName: 'quote_supersedes_fk';
             columns: ['business_id', 'supersedes_quote_id'];
+            isOneToOne: false;
+            referencedRelation: 'quote';
+            referencedColumns: ['business_id', 'id'];
+          },
+        ];
+      };
+      quote_comment: {
+        Row: {
+          author: string;
+          body: string;
+          business_id: string;
+          created_at: string;
+          deleted_at: string | null;
+          id: string;
+          ip: unknown;
+          quote_id: string;
+          updated_at: string;
+        };
+        Insert: {
+          author: string;
+          body: string;
+          business_id: string;
+          created_at?: string;
+          deleted_at?: string | null;
+          id?: string;
+          ip?: unknown;
+          quote_id: string;
+          updated_at?: string;
+        };
+        Update: {
+          author?: string;
+          body?: string;
+          business_id?: string;
+          created_at?: string;
+          deleted_at?: string | null;
+          id?: string;
+          ip?: unknown;
+          quote_id?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'quote_comment_business_id_fkey';
+            columns: ['business_id'];
+            isOneToOne: false;
+            referencedRelation: 'business';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'quote_comment_business_id_quote_id_fkey';
+            columns: ['business_id', 'quote_id'];
             isOneToOne: false;
             referencedRelation: 'quote';
             referencedColumns: ['business_id', 'id'];
@@ -1317,7 +1380,26 @@ export type Database = {
     Functions: {
       cancel_quote: { Args: { p_quote_id: string }; Returns: undefined };
       create_business: { Args: { p_name: string }; Returns: string };
+      hit_rate_limit: {
+        Args: { p_bucket: string; p_limit: number; p_window_seconds: number };
+        Returns: boolean;
+      };
       import_starter_price_list: { Args: { p_business_id: string; p_list: Json }; Returns: number };
+      public_quote_comment: {
+        Args: { p_body: string; p_ip: unknown; p_token_hash: string };
+        Returns: boolean;
+      };
+      public_quote_open: { Args: { p_ip: unknown; p_token_hash: string }; Returns: Json };
+      public_quote_respond: {
+        Args: {
+          p_action: string;
+          p_ip: unknown;
+          p_name: string;
+          p_reason: string;
+          p_token_hash: string;
+        };
+        Returns: Json;
+      };
       revise_quote: { Args: { p_new_quote_id: string; p_quote_id: string }; Returns: string };
       save_quote_draft: { Args: { p_quote: Json }; Returns: undefined };
       send_quote: {

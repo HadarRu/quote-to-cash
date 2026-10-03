@@ -205,6 +205,35 @@ hosted project; `pnpm exec supabase functions serve --env-file .env` locally). D
 **Web build:** the mobile web build is a single-page app (`web.output: "single"`); a host must
 serve `index.html` for every path.
 
+## Customer quote page and PDF
+
+The link a customer receives, `PUBLIC_APP_URL/quote/<token>`, opens a Next.js page
+(`apps/web/app/quote/[token]`): RTL, mobile-first, with the business's logo and details. No sign-in
+and no app install.
+
+- **Data** comes only from the `public-quote` Edge Function (`verify_jwt = false`), called from the
+  customer's browser so it sees their IP. It hashes the token with `TOKEN_PEPPER` and calls
+  service-role-only database functions (`public_quote_open`, `public_quote_respond`,
+  `public_quote_comment`); the page never touches the database.
+- **States:** the first open marks the quote VIEWED; an open past the link's expiry marks it EXPIRED.
+  Expired, cancelled, superseded (a newer revision was sent) and already-approved quotes get clear
+  Hebrew pages. Unknown, malformed and revoked tokens get byte-identical `404` responses.
+- **Approve** requires typing a name; the name, IP and time are stored on the quote and in
+  `audit_log`. Approving (or rejecting) twice returns the first answer. **Reject** takes an
+  optional reason; **comments** go to `quote_comment` for the business.
+- **Rate limits** (per minute): 60 page loads and 10 answers per IP, 30 requests per link
+  (`hit_rate_limit()`).
+- **Security:** every value is rendered as text (React escaping, no raw HTML); quote pages are
+  `noindex`, `no-store`, `Referrer-Policy: no-referrer` and cannot be framed.
+- **PDF:** `GET /quote/<token>/pdf` prints the same page (`?print=1`) with headless Chromium
+  (`playwright-core`, `apps/web/src/pdf/render.ts`), with the Heebo font for Hebrew. Set
+  `CHROMIUM_EXECUTABLE_PATH` where Chromium is not at a standard path (on serverless hosts, a
+  packaged Chromium such as `@sparticuz/chromium`). `PDF_RENDER_ORIGIN` optionally overrides the
+  origin Chromium loads the page from.
+
+Deploy with `pnpm exec supabase functions deploy public-quote` (it needs `TOKEN_PEPPER`). The web
+app reads `SUPABASE_URL` and `SUPABASE_ANON_KEY` from the root `.env`.
+
 ## Quality checks
 
 The same commands run in CI (`.github/workflows/ci.yml`):
@@ -228,14 +257,15 @@ pnpm supabase:types && git diff --exit-code -- packages/types/src/database.types
 
 See `.env.example`. Secrets are never committed.
 
-| Variable            | Used by                                         |
-| ------------------- | ----------------------------------------------- |
-| `SUPABASE_URL`      | apps, Edge Functions                            |
-| `SUPABASE_ANON_KEY` | apps                                            |
-| `TOKEN_PEPPER`      | Edge Functions only (server secret)             |
-| `SENTRY_DSN`        | error reporting                                 |
-| `POSTHOG_KEY`       | product analytics                               |
-| `PUBLIC_APP_URL`    | absolute links sent to customers (web base URL) |
+| Variable                   | Used by                                         |
+| -------------------------- | ----------------------------------------------- |
+| `SUPABASE_URL`             | apps, Edge Functions                            |
+| `SUPABASE_ANON_KEY`        | apps                                            |
+| `TOKEN_PEPPER`             | Edge Functions only (server secret)             |
+| `SENTRY_DSN`               | error reporting                                 |
+| `POSTHOG_KEY`              | product analytics                               |
+| `PUBLIC_APP_URL`           | absolute links sent to customers (web base URL) |
+| `CHROMIUM_EXECUTABLE_PATH` | web PDF route: Chromium binary (optional)       |
 
 ## Conventions
 

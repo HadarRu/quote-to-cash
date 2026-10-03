@@ -92,10 +92,14 @@ begin
     values (b.id, v_quote, v_service, 'התקנת שקע', 2, 'point', 25000, 50000);
     update public.quote
     set status = 'approved', quote_number = app.take_quote_number(b.id),
-        sent_at = now() - interval '2 days', approved_at = now() - interval '1 day',
+        sent_at = now() - interval '2 days', viewed_at = now() - interval '2 days',
+        approved_at = now() - interval '1 day', approved_name = 'משה ישראלי',
         token_hash = encode(extensions.digest(b.id::text, 'sha256'), 'hex'),
         token_expires_at = now() + interval '12 days'
     where id = v_quote;
+
+    insert into public.quote_comment (business_id, quote_id, author, body)
+    values (b.id, v_quote, 'customer', 'אפשר להגיע ביום חמישי בבוקר?');
 
     -- A draft still being written: ₪3,500.00 + 18% VAT.
     insert into public.quote (business_id, customer_id, address_id, title, valid_until,
