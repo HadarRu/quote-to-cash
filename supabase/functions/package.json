@@ -9,7 +9,9 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@q2c/types": "workspace:*"
+    "@q2c/types": "workspace:*",
+    "@q2c/ui": "workspace:*",
+    "@q2c/utils": "workspace:*"
   },
   "devDependencies": {
     "@q2c/config": "workspace:*",

@@ -49,6 +49,7 @@ declare
   v_category uuid;
   v_service uuid;
   v_quote uuid;
+  v_draft uuid;
   v_job uuid;
   v_invoice uuid;
   v_tomorrow_9 timestamptz :=
@@ -79,15 +80,35 @@ begin
     insert into public.service (business_id, category_id, name, unit, default_price_minor)
     values (b.id, v_category, 'התקנת שקע', 'point', 25000) returning id into v_service;
 
-    -- 2 × ₪250.00 = ₪500.00, VAT 18% = ₪90.00, total ₪590.00
-    insert into public.quote (business_id, customer_id, address_id, status, title, valid_until,
-                              subtotal_minor, vat_rate_bp, vat_minor, total_minor, token_hash)
-    values (b.id, v_customer, v_address, 'approved', 'התקנת שקעים בסלון', current_date + 14,
-            50000, 1800, 9000, 59000, encode(extensions.digest(b.id::text, 'sha256'), 'hex'))
+    -- An approved quote: 2 × ₪250.00 = ₪500.00, VAT 18% = ₪90.00, total ₪590.00.
+    -- Lines can only be added to drafts, so it is created as a draft first.
+    insert into public.quote (business_id, customer_id, address_id, title, valid_until,
+                              subtotal_minor, vat_rate_bp, vat_minor, total_minor)
+    values (b.id, v_customer, v_address, 'התקנת שקעים בסלון', current_date + 14,
+            50000, 1800, 9000, 59000)
     returning id into v_quote;
     insert into public.quote_item (business_id, quote_id, service_id, description, quantity, unit,
                                    unit_price_minor, line_total_minor)
     values (b.id, v_quote, v_service, 'התקנת שקע', 2, 'point', 25000, 50000);
+    update public.quote
+    set status = 'approved', quote_number = app.take_quote_number(b.id),
+        sent_at = now() - interval '2 days', viewed_at = now() - interval '2 days',
+        approved_at = now() - interval '1 day', approved_name = 'משה ישראלי',
+        token_hash = encode(extensions.digest(b.id::text, 'sha256'), 'hex'),
+        token_expires_at = now() + interval '12 days'
+    where id = v_quote;
+
+    insert into public.quote_comment (business_id, quote_id, author, body)
+    values (b.id, v_quote, 'customer', 'אפשר להגיע ביום חמישי בבוקר?');
+
+    -- A draft still being written: ₪3,500.00 + 18% VAT.
+    insert into public.quote (business_id, customer_id, address_id, title, valid_until,
+                              subtotal_minor, vat_rate_bp, vat_minor, total_minor)
+    values (b.id, v_customer, v_address, 'החלפת לוח חשמל', current_date + 14, 350000, 1800, 63000, 413000)
+    returning id into v_draft;
+    insert into public.quote_item (business_id, quote_id, description, quantity, unit,
+                                   unit_price_minor, line_total_minor)
+    values (b.id, v_draft, 'החלפת לוח חשמל דירתי', 1, 'job', 350000, 350000);
     insert into public.quote_slot_option (business_id, quote_id, starts_at, ends_at, status)
     values (b.id, v_quote, v_tomorrow_9, v_tomorrow_9 + interval '2 hours', 'selected');
 

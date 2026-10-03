@@ -23,7 +23,8 @@ export interface CustomerAddress {
 
 export interface CustomerQuoteSummary {
   id: string;
-  quoteNumber: number;
+  /** null while a draft (numbers are assigned when sending). */
+  quoteNumber: number | null;
   title: string | null;
   status: string;
   totalMinor: number;

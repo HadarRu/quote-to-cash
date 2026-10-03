@@ -78,7 +78,7 @@ select results_eq(
 create temp table before_delete as
 select qi.id, qi.description, qi.unit, qi.quantity, qi.unit_price_minor, qi.line_total_minor, q.total_minor
 from public.quote_item qi join public.quote q on q.id = qi.quote_id
-where qi.business_id = '10000000-0000-4000-a000-000000000001';
+where qi.business_id = '10000000-0000-4000-a000-000000000001' and qi.service_id is not null;
 
 select is((select count(*) from before_delete), 1::bigint, 'precondition: the seed quote has one line from a service');
 
@@ -88,7 +88,7 @@ where business_id = '10000000-0000-4000-a000-000000000001' and name = 'התקנ�
 select results_eq(
   $$ select qi.id, qi.description, qi.unit, qi.quantity, qi.unit_price_minor, qi.line_total_minor, q.total_minor
      from public.quote_item qi join public.quote q on q.id = qi.quote_id
-     where qi.business_id = '10000000-0000-4000-a000-000000000001' $$,
+     where qi.business_id = '10000000-0000-4000-a000-000000000001' and qi.service_id is not null $$,
   $$ select * from before_delete $$,
   'deleting a service does not alter the quote_item snapshot or the quote total'
 );
