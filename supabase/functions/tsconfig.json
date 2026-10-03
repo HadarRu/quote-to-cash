@@ -1,0 +1,10 @@
+{
+  "extends": "@q2c/config/tsconfig/base.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM"]
+  },
+  // index.ts files are Deno entry points (Deno globals, deno.json import maps);
+  // the request logic they wire up lives in handler.ts and is checked here.
+  "include": ["**/*.ts"],
+  "exclude": ["**/index.ts", "node_modules"]
+}

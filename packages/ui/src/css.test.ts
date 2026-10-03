@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { themeCss } from './css';
+import { themeCss } from './css.ts';
 
 describe('themeCss', () => {
   it('emits brand tokens for light and dark schemes', () => {

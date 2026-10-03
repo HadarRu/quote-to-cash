@@ -13,24 +13,33 @@ begin
 end;
 $$;
 
--- Users: A owner/employee, B owner/employee.
+-- Users: A owner/employee, B owner/employee. They sign in with the test OTP
+-- codes in config.toml. GoTrue reads its token columns as strings, so they
+-- must be '' rather than NULL or sign-in fails with "Database error finding user".
 insert into auth.users (instance_id, id, aud, role, phone, phone_confirmed_at,
-                        raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
-values
-  ('00000000-0000-0000-0000-000000000000', '00000000-0000-4000-a000-000000000001', 'authenticated',
-   'authenticated', '972500000001', now(), '{"provider":"phone","providers":["phone"]}', '{}', now(), now()),
-  ('00000000-0000-0000-0000-000000000000', '00000000-0000-4000-a000-000000000002', 'authenticated',
-   'authenticated', '972500000002', now(), '{"provider":"phone","providers":["phone"]}', '{}', now(), now()),
-  ('00000000-0000-0000-0000-000000000000', '00000000-0000-4000-b000-000000000001', 'authenticated',
-   'authenticated', '972500000003', now(), '{"provider":"phone","providers":["phone"]}', '{}', now(), now()),
-  ('00000000-0000-0000-0000-000000000000', '00000000-0000-4000-b000-000000000002', 'authenticated',
-   'authenticated', '972500000004', now(), '{"provider":"phone","providers":["phone"]}', '{}', now(), now());
+                        raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
+                        confirmation_token, recovery_token, email_change, email_change_token_new,
+                        email_change_token_current, phone_change, phone_change_token,
+                        reauthentication_token)
+select '00000000-0000-0000-0000-000000000000', v.id, 'authenticated', 'authenticated', v.phone, now(),
+       '{"provider":"phone","providers":["phone"]}', '{}', now(), now(),
+       '', '', '', '', '', '', '', ''
+from (values
+  ('00000000-0000-4000-a000-000000000001'::uuid, '972500000001'),
+  ('00000000-0000-4000-a000-000000000002'::uuid, '972500000002'),
+  ('00000000-0000-4000-b000-000000000001'::uuid, '972500000003'),
+  ('00000000-0000-4000-b000-000000000002'::uuid, '972500000004')
+) as v (id, phone);
 
-insert into public.user_profile (id, full_name, phone_e164) values
-  ('00000000-0000-4000-a000-000000000001', 'אבי כהן', '+972500000001'),
-  ('00000000-0000-4000-a000-000000000002', 'דנה לוי', '+972500000002'),
-  ('00000000-0000-4000-b000-000000000001', 'יוסי מזרחי', '+972500000003'),
-  ('00000000-0000-4000-b000-000000000002', 'רונית פרץ', '+972500000004');
+-- Profiles are created by the sync_user_profile trigger; add display names.
+update public.user_profile p set full_name = v.full_name
+from (values
+  ('00000000-0000-4000-a000-000000000001'::uuid, 'אבי כהן'),
+  ('00000000-0000-4000-a000-000000000002'::uuid, 'דנה לוי'),
+  ('00000000-0000-4000-b000-000000000001'::uuid, 'יוסי מזרחי'),
+  ('00000000-0000-4000-b000-000000000002'::uuid, 'רונית פרץ')
+) as v (id, full_name)
+where p.id = v.id;
 
 do $$
 declare
@@ -54,7 +63,7 @@ begin
        '00000000-0000-4000-b000-000000000002'::uuid, '+972522222222')
     ) as t (id, name, owner_id, employee_id, customer_phone)
   loop
-    insert into public.business (id, name) values (b.id, b.name);
+    insert into public.business (id, name, trade, tax_status) values (b.id, b.name, 'electrician', 'osek_murshe');
     insert into public.business_settings (business_id) values (b.id);
     insert into public.business_member (business_id, user_id, role) values
       (b.id, b.owner_id, 'OWNER'),
