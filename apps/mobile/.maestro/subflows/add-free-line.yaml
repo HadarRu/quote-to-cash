@@ -1,0 +1,20 @@
+# Maestro types ASCII only on Android, so test input is in English.
+# Adds one free-text line (description from env LINE) to the open quote editor: 2 × ₪250.
+appId: com.quotetocash.app
+---
+- scrollUntilVisible:
+    element:
+      id: quote-add-free-line
+- tapOn:
+    id: quote-add-free-line
+- tapOn:
+    id: quote-line-description
+- inputText: '${LINE}'
+- tapOn:
+    id: quote-line-quantity
+- eraseText
+- inputText: '2'
+- tapOn:
+    id: quote-line-price
+- inputText: '250'
+- hideKeyboard

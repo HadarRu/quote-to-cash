@@ -49,3 +49,5 @@ Ideas noted while building, intentionally **not** implemented yet.
 - A strict Content-Security-Policy with nonces for the web app.
 - Rate limits keyed by a trusted client IP header from the host, and a separate budget for the PDF
   renderer (its page loads come from the server's address).
+- Tests: run the Maestro flows on iOS too, and one cross-device flow where the link the app sends is
+  opened and approved in the browser.

@@ -298,4 +298,22 @@ describe('quotes send handler', () => {
     expect((await send(deps({ tokenPepper: '' }).d)).status).toBe(500);
     consoleError.mockRestore();
   });
+
+  it('fails closed when the quote cannot be read, and refuses lines the totals reject', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const unreadable = deps({
+      loadQuote: async () => ({ data: null, error: { message: 'connection reset' } }),
+    }).d;
+    expect(await send(unreadable)).toEqual({ status: 500, body: { error: 'internal_error' } });
+    consoleError.mockRestore();
+
+    // A stored line the totals can't price (e.g. a corrupted quantity) is never sent.
+    const broken = toQuoteForSend({
+      ...row,
+      quote_item: [{ ...row.quote_item[0]!, quantity: 'abc' as unknown as number }],
+    });
+    const { d, db } = deps({ loadQuote: async () => ({ data: broken, error: null }) });
+    expect(await send(d)).toEqual({ status: 422, body: { error: 'validation_failed' } });
+    expect(db.sendQuote).not.toHaveBeenCalled();
+  });
 });

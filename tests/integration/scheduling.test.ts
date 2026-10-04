@@ -1,0 +1,119 @@
+// Critical paths 1 (the end: customer picks a date, an appointment exists) and 3
+// (two customers pick the same slot, exactly one wins), through
+// POST /public-quote/:token/schedule. PENDING: the scheduling stage (branch
+// claude/project-thread-2hpt5m, migration *_quote_scheduling.sql) is not on
+// main yet; this suite switches itself on once that migration is present.
+import { existsSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
+import { describe, expect, it } from 'vitest';
+import {
+  adminClient,
+  businesses,
+  callFunction,
+  createDraft,
+  freshIp,
+  repoRoot,
+  sendQuote,
+  signIn,
+  users,
+} from '../stack.ts';
+
+const migrations = join(repoRoot, 'supabase/migrations');
+const schedulingShipped =
+  existsSync(migrations) &&
+  readdirSync(migrations).some((f) => f.endsWith('_quote_scheduling.sql'));
+
+/** A visit slot a few days out, at a time no other test uses. */
+function slotTime(daysAhead: number, hour: number) {
+  const start = new Date();
+  start.setUTCDate(start.getUTCDate() + daysAhead);
+  start.setUTCHours(hour, Math.floor(Math.random() * 12) * 5, 0, 0);
+  const end = new Date(start.getTime() + 2 * 60 * 60 * 1000);
+  return { startsAt: start.toISOString(), endsAt: end.toISOString() };
+}
+
+/** Sends a quote of business A proposing these slots, approves it as the customer. */
+async function approvedQuoteWithSlots(slots: { startsAt: string; endsAt: string }[]) {
+  const owner = await signIn(users.ownerA.phone);
+  const sent = await sendQuote(owner, await createDraft(owner, businesses.a), { slots });
+  const ip = freshIp();
+  const approved = await callFunction(`public-quote/${sent.token}/approve`, {
+    body: { name: 'לקוח בדיקה' },
+    headers: { 'X-Forwarded-For': ip },
+  });
+  expect(approved.status).toBe(200);
+  const view = await callFunction(`public-quote/${sent.token}`, {
+    headers: { 'X-Forwarded-For': ip },
+  });
+  const offered = (view.body!.slots ?? []) as { id: string; startsAt: string }[];
+  expect(offered).toHaveLength(slots.length);
+  return { ...sent, ip, slots: offered };
+}
+
+const schedule = (token: string, slotId: string, ip: string) =>
+  callFunction(`public-quote/${token}/schedule`, {
+    body: { slotId },
+    headers: { 'X-Forwarded-For': ip },
+  });
+
+describe.skipIf(!schedulingShipped)('scheduling (pending on the scheduling stage)', () => {
+  it('the customer picks a date after approving, and a confirmed appointment exists', async () => {
+    const quote = await approvedQuoteWithSlots([slotTime(20, 6), slotTime(21, 6)]);
+    const res = await schedule(quote.token, quote.slots[1]!.id, quote.ip);
+    expect(res.status).toBe(200);
+
+    const { data } = await adminClient()
+      .from('appointment')
+      .select('status, starts_at')
+      .eq('quote_id', quote.quoteId);
+    expect(data).toHaveLength(1);
+    expect(data![0]!.status).toBe('confirmed');
+    expect(new Date(data![0]!.starts_at).toISOString()).toBe(quote.slots[1]!.startsAt);
+
+    // Booking the same slot again is harmless; a different one is refused.
+    expect((await schedule(quote.token, quote.slots[1]!.id, quote.ip)).status).toBe(200);
+    const other = await schedule(quote.token, quote.slots[0]!.id, quote.ip);
+    expect(other.status).toBe(409);
+    expect(other.body).toEqual({ error: 'already_scheduled' });
+  });
+
+  it('two customers pick the same slot at the same moment: exactly one wins', async () => {
+    const time = slotTime(25, 7);
+    const [first, second] = await Promise.all([
+      approvedQuoteWithSlots([time, slotTime(26, 7)]),
+      approvedQuoteWithSlots([time, slotTime(27, 7)]),
+    ]);
+    const results = await Promise.all([
+      schedule(first!.token, first!.slots[0]!.id, first!.ip),
+      schedule(second!.token, second!.slots[0]!.id, second!.ip),
+    ]);
+    const statuses = results.map((r) => r.status).sort();
+    expect(statuses).toEqual([200, 409]);
+    expect(results.find((r) => r.status === 409)!.body).toEqual({ error: 'conflict' });
+
+    const { data } = await adminClient()
+      .from('appointment')
+      .select('quote_id')
+      .eq('status', 'confirmed')
+      .eq('starts_at', time.startsAt);
+    expect(data).toHaveLength(1);
+  });
+
+  it('rejects scheduling before approval, an unknown slot, and another quote’s slot', async () => {
+    const owner = await signIn(users.ownerA.phone);
+    const unapproved = await sendQuote(owner, await createDraft(owner, businesses.a), {
+      slots: [slotTime(30, 6), slotTime(31, 6)],
+    });
+    const ip = freshIp();
+    const view = await callFunction(`public-quote/${unapproved.token}`, {
+      headers: { 'X-Forwarded-For': ip },
+    });
+    const slotId = ((view.body!.slots ?? []) as { id: string }[])[0]!.id;
+    expect((await schedule(unapproved.token, slotId, ip)).status).toBeGreaterThanOrEqual(400);
+
+    const approved = await approvedQuoteWithSlots([slotTime(32, 6), slotTime(33, 6)]);
+    expect((await schedule(approved.token, crypto.randomUUID(), ip)).status).toBe(404);
+    expect((await schedule(approved.token, slotId, ip)).status).toBe(404);
+    expect((await schedule(approved.token, 'not-a-uuid', ip)).status).toBe(422);
+  });
+});

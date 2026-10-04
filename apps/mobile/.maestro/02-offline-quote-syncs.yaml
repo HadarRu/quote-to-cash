@@ -1,0 +1,67 @@
+# Critical path 2: create and send a quote offline, restart the app, reconnect;
+# it syncs and is sent.
+appId: com.quotetocash.app
+name: Offline quote syncs and sends after restart
+---
+- runFlow: subflows/sign-in.yaml
+# Load the customer list once while online, so it is on the device.
+- tapOn:
+    id: home-customers
+- extendedWaitUntil:
+    visible: 'משה ישראלי'
+    timeout: 15000
+- back
+- setAirplaneMode: enabled
+- tapOn:
+    id: home-new-quote
+- extendedWaitUntil:
+    visible:
+      id: quote-customer-search
+    timeout: 15000
+- tapOn:
+    id: quote-customer-search
+# Seeded customer משה ישראלי, found by phone (Maestro types ASCII only).
+- inputText: '0521111111'
+- tapOn:
+    id: quote-customer-option
+- runFlow:
+    file: subflows/add-free-line.yaml
+    env:
+      LINE: 'Offline quote'
+- tapOn:
+    id: quote-preview
+- tapOn:
+    id: quote-send
+- extendedWaitUntil:
+    visible:
+      id: quote-send-pending
+    timeout: 30000
+# Kill the app and reopen it, still offline.
+- stopApp
+- launchApp:
+    clearState: false
+- extendedWaitUntil:
+    visible:
+      id: home-quotes
+    timeout: 30000
+- tapOn:
+    id: home-quotes
+# Still on the device after the restart, waiting to sync (the only such quote).
+- assertVisible:
+    id: quote-row-sync
+- setAirplaneMode: disabled
+# Reconnecting triggers delivery; the quote becomes SENT once the server confirms.
+- extendedWaitUntil:
+    notVisible:
+      id: quote-row-sync
+    timeout: 60000
+# Newest first: the quote just sent.
+- tapOn:
+    id: quote-row
+    index: 0
+- extendedWaitUntil:
+    visible:
+      id: quote-status
+      text: '.*נשלחה.*'
+    timeout: 15000
+- assertVisible: 'משה ישראלי'

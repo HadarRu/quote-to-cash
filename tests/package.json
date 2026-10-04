@@ -1,0 +1,26 @@
+{
+  "name": "@q2c/tests",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test:integration": "vitest run --config integration/vitest.config.ts",
+    "test:e2e": "playwright test --config portal/playwright.config.ts"
+  },
+  "dependencies": {
+    "@q2c/types": "workspace:*",
+    "@q2c/ui": "workspace:*",
+    "@q2c/utils": "workspace:*"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@q2c/config": "workspace:*",
+    "@supabase/supabase-js": "^2.117.2",
+    "@types/node": "^22.19.0",
+    "eslint": "^9.39.5",
+    "typescript": "~6.0.3",
+    "vitest": "^5.0.3"
+  }
+}

@@ -19,6 +19,8 @@ apps/mobile/android/
 # tooling
 .turbo/
 coverage/
+tests/test-results/
+tests/playwright-report/
 *.log
 .DS_Store
 

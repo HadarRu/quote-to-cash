@@ -297,3 +297,40 @@ describe('clientIp', () => {
     expect(clientIp(new Request('http://x'))).toBeNull();
   });
 });
+
+describe('public quote: failures', () => {
+  it('maps database errors, and never leaks their text', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { deps, add } = fakeDb();
+    const token = await add();
+    const failing = (code: string | undefined): Deps => ({
+      ...deps,
+      respond: async () => ({ data: null, error: { code, message: 'secret detail' } }),
+      open: async () => ({ data: null, error: { code, message: 'secret detail' } }),
+    });
+    const approve = (d: Deps) => call(d, token, { action: 'approve', body: { name: 'דנה לוי' } });
+    expect((await approve(failing('22023'))).status).toBe(422);
+    const res = await approve(failing('XX000'));
+    expect(res.status).toBe(500);
+    expect(await res.text()).not.toContain('secret');
+    expect((await call(failing(undefined), token)).status).toBe(500);
+    consoleError.mockRestore();
+  });
+
+  it('answers 500 when a dependency throws, and when the pepper is missing', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { deps, add } = fakeDb();
+    const token = await add();
+    const throwing: Deps = {
+      ...deps,
+      open: async () => {
+        throw new Error('boom');
+      },
+    };
+    const res = await call(throwing, token);
+    expect(res.status).toBe(500);
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBe('*');
+    expect((await call({ ...deps, tokenPepper: '' }, token)).status).toBe(500);
+    consoleError.mockRestore();
+  });
+});

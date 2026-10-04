@@ -1,0 +1,30 @@
+# Fresh install, then sign in as owner A (seed.sql) with the local test OTP.
+appId: com.quotetocash.app
+---
+- launchApp:
+    clearState: true
+- runFlow:
+    when:
+      visible:
+        id: onboarding-skip
+    commands:
+      - tapOn:
+          id: onboarding-skip
+- extendedWaitUntil:
+    visible:
+      id: sign-in-phone
+    timeout: 60000
+- tapOn:
+    id: sign-in-phone
+- inputText: '0500000001'
+- tapOn:
+    id: sign-in-send
+- tapOn:
+    id: sign-in-code
+- inputText: '123456'
+- tapOn:
+    id: sign-in-verify
+- extendedWaitUntil:
+    visible:
+      id: home-new-quote
+    timeout: 30000

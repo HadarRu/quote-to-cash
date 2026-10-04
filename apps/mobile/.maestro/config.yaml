@@ -1,0 +1,10 @@
+# Maestro mobile E2E (Android). Runs in CI (.github/workflows/ci.yml, job mobile-e2e)
+# against a debug build and the local Supabase stack seeded by supabase/seed.sql.
+# Locally: an emulator with the app installed, then `maestro test apps/mobile/.maestro`.
+flows:
+  - '*.yaml'
+executionOrder:
+  continueOnFailure: false
+  flowsOrder:
+    - 01-create-and-send-quote
+    - 02-offline-quote-syncs

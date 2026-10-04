@@ -13,6 +13,9 @@
     "typecheck": "turbo run typecheck",
     "lint": "turbo run lint",
     "test": "turbo run test",
+    "coverage": "vitest run --coverage",
+    "test:integration": "pnpm --filter @q2c/tests test:integration",
+    "test:e2e": "pnpm --filter @q2c/tests test:e2e",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "supabase:start": "supabase start",
@@ -23,10 +26,12 @@
   },
   "devDependencies": {
     "@q2c/config": "workspace:*",
+    "@vitest/coverage-v8": "5.0.3",
     "prettier": "^3.9.9",
     "supabase": "^2.119.0",
     "turbo": "^2.11.7",
-    "typescript": "~6.0.3"
+    "typescript": "~6.0.3",
+    "vitest": "^5.0.3"
   },
   "prettier": "@q2c/config/prettier"
 }
