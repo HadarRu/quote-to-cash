@@ -133,6 +133,10 @@ begin
 
     insert into public.notification (business_id, customer_id, channel, template, to_address)
     values (b.id, v_customer, 'sms', 'quote_sent', b.customer_phone);
+    insert into public.device (business_id, user_id, expo_push_token, platform)
+    values (b.id, b.owner_id, 'ExponentPushToken[seed-' || b.id || ']', 'ios');
+    insert into public.notification_preference (business_id, user_id, event, push_enabled)
+    values (b.id, b.owner_id, 'quote_viewed', false);
     insert into public.subscription (business_id, plan_code, status, trial_ends_at)
     values (b.id, 'trial', 'trialing', now() + interval '14 days');
     insert into public.file (business_id, kind, bucket, storage_path, mime_type, size_bytes, job_id)

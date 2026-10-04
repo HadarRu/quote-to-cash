@@ -394,6 +394,50 @@ export type Database = {
           },
         ];
       };
+      device: {
+        Row: {
+          business_id: string;
+          created_at: string;
+          deleted_at: string | null;
+          expo_push_token: string;
+          id: string;
+          last_seen_at: string;
+          platform: Database['public']['Enums']['device_platform'];
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          business_id: string;
+          created_at?: string;
+          deleted_at?: string | null;
+          expo_push_token: string;
+          id?: string;
+          last_seen_at?: string;
+          platform: Database['public']['Enums']['device_platform'];
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          business_id?: string;
+          created_at?: string;
+          deleted_at?: string | null;
+          expo_push_token?: string;
+          id?: string;
+          last_seen_at?: string;
+          platform?: Database['public']['Enums']['device_platform'];
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'device_business_id_fkey';
+            columns: ['business_id'];
+            isOneToOne: false;
+            referencedRelation: 'business';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       file: {
         Row: {
           bucket: string;
@@ -768,12 +812,16 @@ export type Database = {
       };
       notification: {
         Row: {
+          attempts: number;
           business_id: string;
           channel: Database['public']['Enums']['notification_channel'];
+          claimed_at: string | null;
           created_at: string;
           customer_id: string | null;
+          dedupe_key: string | null;
           deleted_at: string | null;
           error: string | null;
+          event: Database['public']['Enums']['notification_event'] | null;
           id: string;
           payload: NonNullable<Json>;
           read_at: string | null;
@@ -785,12 +833,16 @@ export type Database = {
           updated_at: string;
         };
         Insert: {
+          attempts?: number;
           business_id: string;
           channel: Database['public']['Enums']['notification_channel'];
+          claimed_at?: string | null;
           created_at?: string;
           customer_id?: string | null;
+          dedupe_key?: string | null;
           deleted_at?: string | null;
           error?: string | null;
+          event?: Database['public']['Enums']['notification_event'] | null;
           id?: string;
           payload?: NonNullable<Json>;
           read_at?: string | null;
@@ -802,12 +854,16 @@ export type Database = {
           updated_at?: string;
         };
         Update: {
+          attempts?: number;
           business_id?: string;
           channel?: Database['public']['Enums']['notification_channel'];
+          claimed_at?: string | null;
           created_at?: string;
           customer_id?: string | null;
+          dedupe_key?: string | null;
           deleted_at?: string | null;
           error?: string | null;
+          event?: Database['public']['Enums']['notification_event'] | null;
           id?: string;
           payload?: NonNullable<Json>;
           read_at?: string | null;
@@ -828,6 +884,41 @@ export type Database = {
           },
           {
             foreignKeyName: 'notification_business_id_fkey';
+            columns: ['business_id'];
+            isOneToOne: false;
+            referencedRelation: 'business';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      notification_preference: {
+        Row: {
+          business_id: string;
+          created_at: string;
+          event: Database['public']['Enums']['notification_event'];
+          push_enabled: boolean;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          business_id: string;
+          created_at?: string;
+          event: Database['public']['Enums']['notification_event'];
+          push_enabled?: boolean;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          business_id?: string;
+          created_at?: string;
+          event?: Database['public']['Enums']['notification_event'];
+          push_enabled?: boolean;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'notification_preference_business_id_fkey';
             columns: ['business_id'];
             isOneToOne: false;
             referencedRelation: 'business';
@@ -1430,7 +1521,47 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      action_queue: {
+        Args: { p_business_id: string };
+        Returns: {
+          amount_minor: number;
+          customer_name: string;
+          customer_phone: string;
+          error: string;
+          event: Database['public']['Enums']['notification_event'];
+          id: string;
+          kind: string;
+          number: number;
+          quote_id: string;
+          since: string;
+          title: string;
+        }[];
+      };
       cancel_quote: { Args: { p_quote_id: string }; Returns: undefined };
+      claim_analytics_events: {
+        Args: { p_limit: number };
+        Returns: {
+          business_id: string;
+          created_at: string;
+          distinct_id: string;
+          event: string;
+          id: number;
+          properties: Json;
+        }[];
+      };
+      claim_push_notifications: {
+        Args: { p_limit: number };
+        Returns: {
+          attempts: number;
+          business_id: string;
+          event: Database['public']['Enums']['notification_event'];
+          id: string;
+          payload: Json;
+          recipient_user_id: string;
+          tokens: string[];
+        }[];
+      };
+      complete_push_notifications: { Args: { p_results: Json }; Returns: undefined };
       create_business: { Args: { p_name: string }; Returns: string };
       create_invoice: {
         Args: { p_idempotency_key: string; p_job_id: string; p_user_id: string };
@@ -1439,11 +1570,14 @@ export type Database = {
           invoice_id: string;
         }[];
       };
+      dismiss_notification: { Args: { p_notification_id: string }; Returns: undefined };
+      enqueue_appointment_reminders: { Args: { p_hour?: number; p_now?: string }; Returns: number };
       hit_rate_limit: {
         Args: { p_bucket: string; p_limit: number; p_window_seconds: number };
         Returns: boolean;
       };
       import_starter_price_list: { Args: { p_business_id: string; p_list: Json }; Returns: number };
+      mark_analytics_sent: { Args: { p_ids: number[] }; Returns: undefined };
       public_quote_comment: {
         Args: { p_body: string; p_ip: unknown; p_token_hash: string };
         Returns: boolean;
@@ -1462,6 +1596,14 @@ export type Database = {
       public_quote_schedule: {
         Args: { p_ip: unknown; p_slot_id: string; p_token_hash: string };
         Returns: Json;
+      };
+      register_device: {
+        Args: {
+          p_business_id: string;
+          p_platform: Database['public']['Enums']['device_platform'];
+          p_token: string;
+        };
+        Returns: string;
       };
       revise_quote: { Args: { p_new_quote_id: string; p_quote_id: string }; Returns: string };
       save_quote_draft: { Args: { p_quote: Json }; Returns: undefined };
@@ -1504,18 +1646,29 @@ export type Database = {
           status: Database['public']['Enums']['invoice_status'];
         }[];
       };
+      unregister_device: { Args: { p_token: string }; Returns: undefined };
     };
     Enums: {
       appointment_status: 'proposed' | 'confirmed' | 'completed' | 'cancelled' | 'no_show';
       audit_action: 'insert' | 'update' | 'delete';
       business_trade:
         'electrician' | 'plumber' | 'hvac' | 'handyman' | 'locksmith' | 'painter' | 'other';
+      device_platform: 'ios' | 'android' | 'web';
       file_kind: 'logo' | 'quote_attachment' | 'job_photo' | 'invoice_pdf' | 'signature' | 'other';
       invoice_status: 'not_issued' | 'issued' | 'sent' | 'paid' | 'failed' | 'voided';
       job_status: 'scheduled' | 'in_progress' | 'on_hold' | 'completed' | 'cancelled';
       member_role: 'OWNER' | 'ADMIN' | 'EMPLOYEE';
       member_status: 'invited' | 'active' | 'disabled';
       notification_channel: 'sms' | 'whatsapp' | 'email' | 'push' | 'in_app';
+      notification_event:
+        | 'quote_viewed'
+        | 'quote_approved'
+        | 'quote_rejected'
+        | 'appointment_created'
+        | 'appointment_changed'
+        | 'appointment_reminder'
+        | 'invoice_issued'
+        | 'payment_received';
       notification_status: 'queued' | 'sent' | 'delivered' | 'failed' | 'read';
       payment_method:
         'cash' | 'bank_transfer' | 'credit_card' | 'bit' | 'paybox' | 'check' | 'other';
@@ -1654,12 +1807,23 @@ export const Constants = {
         'painter',
         'other',
       ],
+      device_platform: ['ios', 'android', 'web'],
       file_kind: ['logo', 'quote_attachment', 'job_photo', 'invoice_pdf', 'signature', 'other'],
       invoice_status: ['not_issued', 'issued', 'sent', 'paid', 'failed', 'voided'],
       job_status: ['scheduled', 'in_progress', 'on_hold', 'completed', 'cancelled'],
       member_role: ['OWNER', 'ADMIN', 'EMPLOYEE'],
       member_status: ['invited', 'active', 'disabled'],
       notification_channel: ['sms', 'whatsapp', 'email', 'push', 'in_app'],
+      notification_event: [
+        'quote_viewed',
+        'quote_approved',
+        'quote_rejected',
+        'appointment_created',
+        'appointment_changed',
+        'appointment_reminder',
+        'invoice_issued',
+        'payment_received',
+      ],
       notification_status: ['queued', 'sent', 'delivered', 'failed', 'read'],
       payment_method: ['cash', 'bank_transfer', 'credit_card', 'bit', 'paybox', 'check', 'other'],
       payment_status: ['pending', 'succeeded', 'failed', 'refunded'],

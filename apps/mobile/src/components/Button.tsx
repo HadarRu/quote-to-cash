@@ -11,6 +11,8 @@ interface ButtonProps {
   variant?: Variant;
   loading?: boolean;
   disabled?: boolean;
+  /** `large`: the screen's main call to action. */
+  size?: 'default' | 'large';
   testID?: string;
 }
 
@@ -20,6 +22,7 @@ export function Button({
   variant = 'primary',
   loading = false,
   disabled = false,
+  size = 'default',
   testID,
 }: ButtonProps) {
   const colors = useThemeColors();
@@ -48,12 +51,16 @@ export function Button({
         styles.base,
         { backgroundColor: background, opacity: inactive ? 0.55 : pressed ? 0.85 : 1 },
         variant === 'secondary' && { borderWidth: 1, borderColor: colors.primary },
+        size === 'large' && styles.large,
       ]}
     >
       {loading ? (
         <ActivityIndicator color={foreground} />
       ) : (
-        <AppText variant="heading" style={[styles.label, { color: foreground }]}>
+        <AppText
+          variant="heading"
+          style={[styles.label, size === 'large' && styles.largeLabel, { color: foreground }]}
+        >
           {label}
         </AppText>
       )}
@@ -70,4 +77,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   label: { fontSize: 16, lineHeight: 24, textAlign: 'center' },
+  large: { minHeight: 72 },
+  largeLabel: { fontSize: 20, lineHeight: 28 },
 });
