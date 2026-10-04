@@ -184,6 +184,10 @@ Create, send, revise and cancel quotes in `apps/mobile/app/(app)/quotes` (Home â
   validity date or `quote_valid_days`) and lets `send_quote()` assign the next number under a lock.
   It returns the customer link (`PUBLIC_APP_URL/quote/<token>`) and a `wa.me` link with a Hebrew
   message. Retrying with the same `sendKey` returns the same number (never a second one).
+- **Proposed visit times:** the preview lets the owner propose 2-3 visit times (day, start hour
+  and length, Israel time) or none. They go with the send (`slots: [{ startsAt, endsAt }]`) and
+  are stored by `send_quote()` as `quote_slot_option` rows (OFFERED; future, at most 12 hours,
+  not overlapping each other). The quote details show them, and the one the customer booked.
 - **Rules (database-enforced):** only drafts can be edited; status, number, token and snapshot
   change only through `send_quote` / `revise_quote` / `cancel_quote`. **Revise** copies a sent
   quote into a new draft revision; the old one becomes SUPERSEDED and its link is revoked.
@@ -214,13 +218,20 @@ and no app install.
 - **Data** comes only from the `public-quote` Edge Function (`verify_jwt = false`), called from the
   customer's browser so it sees their IP. It hashes the token with `TOKEN_PEPPER` and calls
   service-role-only database functions (`public_quote_open`, `public_quote_respond`,
-  `public_quote_comment`); the page never touches the database.
+  `public_quote_comment`, `public_quote_schedule`); the page never touches the database.
 - **States:** the first open marks the quote VIEWED; an open past the link's expiry marks it EXPIRED.
   Expired, cancelled, superseded (a newer revision was sent) and already-approved quotes get clear
   Hebrew pages. Unknown, malformed and revoked tokens get byte-identical `404` responses.
 - **Approve** requires typing a name; the name, IP and time are stored on the quote and in
   `audit_log`. Approving (or rejecting) twice returns the first answer. **Reject** takes an
   optional reason; **comments** go to `quote_comment` for the business.
+- **Scheduling:** an open quote lists the proposed times; once approved, the customer picks one
+  (`POST /public-quote/<token>/schedule` with `{ slotId }`). That books a CONFIRMED `appointment`
+  (the chosen time becomes SELECTED, the others DECLINED). Times that overlap another confirmed
+  visit of the business, or have passed, show as taken; if one is taken meanwhile, the
+  `appointment_no_overlapping_confirmed` exclusion constraint refuses it and the function answers
+  `409 { "error": "conflict" }`, so the page asks for another time. Picking the booked time again
+  returns it; a different time after booking is refused (`409 already_scheduled`).
 - **Rate limits** (per minute): 60 page loads and 10 answers per IP, 30 requests per link
   (`hit_rate_limit()`).
 - **Security:** every value is rendered as text (React escaping, no raw HTML); quote pages are

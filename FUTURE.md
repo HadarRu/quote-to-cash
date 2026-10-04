@@ -41,13 +41,14 @@ Ideas noted while building, intentionally **not** implemented yet.
   token expiry today).
 - Customer page: notify the business (push / WhatsApp) when a quote is viewed, approved, rejected or
   commented on, and show customer comments in the app with replies.
-- Customer page: let the customer pick one of the offered time slots (`quote_slot_option`) when
-  approving.
 - PDF: store the approved quote's PDF in Storage (`file.kind`) instead of rendering on every download,
   and package Chromium for the serverless host.
 - A strict Content-Security-Policy with nonces for the web app.
 - Rate limits keyed by a trusted client IP header from the host, and a separate budget for the PDF
   renderer (its page loads come from the server's address).
+- Scheduling: let the owner reschedule or cancel a booked visit from the app (release the SELECTED
+  time so the customer can pick again), create the job when a visit is booked, notify the owner
+  when the customer books, and show all visits on a calendar.
 - Invoicing providers that issue the legal document themselves (e.g. Green Invoice / Morning,
   iCount, EZcount), including Tax Authority allocation numbers.
 - Partial payments and several payments per invoice (today "mark paid" records one payment for the

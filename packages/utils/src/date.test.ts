@@ -5,6 +5,10 @@ import {
   endOfDayInJerusalem,
   formatDateIL,
   formatDateTimeIL,
+  formatSlotIL,
+  formatTimeIL,
+  formatWeekdayIL,
+  jerusalemTime,
 } from './date.ts';
 
 describe('formatDateIL', () => {
@@ -36,5 +40,28 @@ describe('Jerusalem calendar days', () => {
 describe('formatDateTimeIL', () => {
   it('shows Israel time', () => {
     expect(formatDateTimeIL('2026-10-02T22:30:00Z')).toBe('03.10.2026, 01:30');
+  });
+});
+
+describe('jerusalemTime', () => {
+  it('turns Israel wall-clock time into UTC, in summer and in winter', () => {
+    expect(jerusalemTime('2026-07-01', 8).toISOString()).toBe('2026-07-01T05:00:00.000Z');
+    expect(jerusalemTime('2026-12-01', 8, 30).toISOString()).toBe('2026-12-01T06:30:00.000Z');
+  });
+});
+
+describe('formatTimeIL and formatWeekdayIL', () => {
+  it('show Israel time of day and weekday', () => {
+    expect(formatTimeIL('2026-12-01T06:30:00Z')).toBe('08:30');
+    // 23:30 UTC on Monday 30 Nov is already Tuesday in Israel.
+    expect(formatWeekdayIL('2026-11-30T23:30:00Z')).toBe('יום שלישי');
+  });
+});
+
+describe('formatSlotIL', () => {
+  it('shows weekday, date and the time range in Israel', () => {
+    expect(formatSlotIL('2026-10-06T05:00:00Z', '2026-10-06T07:00:00Z')).toBe(
+      'יום שלישי 06.10.2026, 08:00–10:00',
+    );
   });
 });

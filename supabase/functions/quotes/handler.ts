@@ -1,6 +1,7 @@
 import {
   businessVatRateBp,
   SendQuoteRequestSchema,
+  slotsInFuture,
   type QuoteSnapshot,
   type SendQuoteResponse,
   type TaxStatus,
@@ -66,6 +67,8 @@ export interface SendQuoteArgs {
   p_token_expires_at: string;
   p_totals: Record<string, number>;
   p_snapshot: QuoteSnapshot;
+  /** Proposed visit times: [] or 2-3. */
+  p_slots: { starts_at: string; ends_at: string }[];
 }
 
 export interface SendQuoteRow {
@@ -97,9 +100,9 @@ export interface Deps {
 const SEND_PATH =
   /\/quotes\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/send\/?$/i;
 /**
- * POST /quotes/:id/send { sendKey } -> SendQuoteResponse
+ * POST /quotes/:id/send { sendKey, slots? } -> SendQuoteResponse
  *
- * Sends a DRAFT quote: recomputes the totals from the stored lines (the app's
+ * Sends a DRAFT quote, optionally with 2-3 proposed visit times: recomputes the totals from the stored lines (the app's
  * totals are only a preview), freezes a snapshot of what the customer sees,
  * creates a random customer link token (only its peppered hash is stored) and
  * lets send_quote assign the number. Retrying with the same sendKey returns
@@ -130,7 +133,11 @@ export async function handleQuotes(req: Request, deps: Deps): Promise<Response> 
     return json(400, { error: 'invalid_json' });
   }
   const parsed = SendQuoteRequestSchema.safeParse(body);
-  if (!parsed.success) return json(422, { error: 'validation_failed' });
+  if (!parsed.success) {
+    const slotIssue = parsed.error.issues.find((issue) => issue.path[0] === 'slots');
+    return json(422, { error: slotIssue?.message ?? 'validation_failed' });
+  }
+  const slots = parsed.data.slots ?? [];
 
   const loaded = await deps.loadQuote(authorization, quoteId);
   if (loaded.error) {
@@ -154,6 +161,7 @@ export async function handleQuotes(req: Request, deps: Deps): Promise<Response> 
   }
 
   const now = (deps.now ?? (() => new Date()))();
+  if (!slotsInFuture(slots, now)) return json(422, { error: 'slot_in_past' });
   const today = dateInJerusalem(now);
   const validUntil = quote.validUntil ?? addDays(today, quote.business.quoteValidDays);
   if (validUntil < today) return json(422, { error: 'quote_valid_until_past' });
@@ -208,11 +216,13 @@ export async function handleQuotes(req: Request, deps: Deps): Promise<Response> 
     p_token_expires_at: expiresAt.toISOString(),
     p_totals: snapshot.totals,
     p_snapshot: snapshot,
+    p_slots: slots.map((slot) => ({ starts_at: slot.startsAt, ends_at: slot.endsAt })),
   });
   if (error || !data) {
     if (error?.code === '42501') return json(404, { error: 'quote_not_found' });
     if (error?.code === '55000') return json(409, { error: 'quote_not_draft' });
     if (error?.code === '22023') return json(422, { error: 'quote_lines_required' });
+    if (error?.code === '22007') return json(422, { error: 'slots_invalid' });
     console.error('quotes: send_quote failed', error);
     return json(500, { error: 'internal_error' });
   }

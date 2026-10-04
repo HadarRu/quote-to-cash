@@ -2,6 +2,7 @@ import {
   PublicQuoteApproveSchema,
   PublicQuoteCommentSchema,
   PublicQuoteRejectSchema,
+  PublicQuoteScheduleSchema,
   QUOTE_TOKEN_PATTERN,
   type PublicQuoteView,
   type QuoteSnapshot,
@@ -18,6 +19,8 @@ export type DbView =
       expires_at: string | null;
       approval: { name: string; at: string } | null;
       rejection: { reason: string | null; at: string } | null;
+      slots: { id: string; starts_at: string; ends_at: string; available: boolean }[];
+      appointment: { slot_id: string; starts_at: string; ends_at: string } | null;
       already?: boolean;
     };
 
@@ -37,6 +40,7 @@ export interface Deps {
     ip: string | null,
   ): Promise<DbResult<DbView>>;
   comment(tokenHash: string, body: string, ip: string | null): Promise<DbResult<boolean>>;
+  schedule(tokenHash: string, slotId: string, ip: string | null): Promise<DbResult<DbView>>;
   /** Signed URLs for the logo (business-assets) and photos (quote-photos). */
   signUrls(
     logoPath: string | null,
@@ -54,7 +58,9 @@ export const LIMITS = {
   token: 30,
 } as const;
 
-const PATH = /\/public-quote\/([^/]+)(?:\/(approve|reject|comment))?\/?$/;
+type Action = 'approve' | 'reject' | 'comment' | 'schedule';
+
+const PATH = /\/public-quote\/([^/]+)(?:\/(approve|reject|comment|schedule))?\/?$/;
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -78,6 +84,8 @@ export function clientIp(req: Request): string | null {
  *   POST /public-quote/:token/approve  { name }
  *   POST /public-quote/:token/reject   { reason? }
  *   POST /public-quote/:token/comment  { body }
+ *   POST /public-quote/:token/schedule { slotId }  book a proposed time (approved quotes);
+ *        409 { error: 'conflict' } when the time is no longer free
  */
 export async function handlePublicQuote(req: Request, deps: Deps): Promise<Response> {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
@@ -89,11 +97,7 @@ export async function handlePublicQuote(req: Request, deps: Deps): Promise<Respo
 
   const match = PATH.exec(new URL(req.url).pathname);
   if (!match) return withCors(notFound());
-  const [, token, action] = match as unknown as [
-    string,
-    string,
-    'approve' | 'reject' | 'comment' | undefined,
-  ];
+  const [, token, action] = match as unknown as [string, string, Action | undefined];
   if ((action && req.method !== 'POST') || (!action && req.method !== 'GET'))
     return withCors(json(405, { error: 'method_not_allowed' }));
 
@@ -124,7 +128,7 @@ async function route(
   req: Request,
   deps: Deps,
   tokenHash: string,
-  action: 'approve' | 'reject' | 'comment' | undefined,
+  action: Action | undefined,
   ip: string | null,
 ): Promise<Response> {
   if (!action) {
@@ -148,6 +152,14 @@ async function route(
     return data ? json(200, { ok: true }) : notFound();
   }
 
+  if (action === 'schedule') {
+    const parsed = PublicQuoteScheduleSchema.safeParse(body);
+    if (!parsed.success) return json(422, { error: parsed.error.issues[0]?.message });
+    const { data, error } = await deps.schedule(tokenHash, parsed.data.slotId, ip);
+    if (error) return dbFailure(error);
+    return data ? json(200, await toView(deps, data)) : notFound();
+  }
+
   let name: string | null = null;
   let reason: string | null = null;
   if (action === 'approve') {
@@ -166,6 +178,9 @@ async function route(
 
 function dbFailure(error: DbError): Response {
   if (error.code === '55000') return json(409, { error: 'quote_closed' });
+  // The time overlaps another confirmed visit (exclusion constraint) or has passed.
+  if (error.code === '23P01') return json(409, { error: 'conflict' });
+  if (error.code === '23505') return json(409, { error: 'already_scheduled' });
   if (error.code === '22023') return json(422, { error: 'validation_failed' });
   console.error('public-quote: database error', error);
   return json(500, { error: 'internal_error' });
@@ -185,6 +200,19 @@ async function toView(deps: Deps, view: DbView): Promise<PublicQuoteView & { alr
     rejection: view.rejection,
     logoUrl,
     photoUrls,
+    slots: (view.slots ?? []).map((slot) => ({
+      id: slot.id,
+      startsAt: slot.starts_at,
+      endsAt: slot.ends_at,
+      available: slot.available,
+    })),
+    appointment: view.appointment
+      ? {
+          slotId: view.appointment.slot_id,
+          startsAt: view.appointment.starts_at,
+          endsAt: view.appointment.ends_at,
+        }
+      : null,
     ...(view.already === undefined ? {} : { already: view.already }),
   };
 }
