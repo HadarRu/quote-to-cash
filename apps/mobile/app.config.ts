@@ -7,7 +7,7 @@ import { resolve } from 'node:path';
 const rootEnv = resolve(__dirname, '../../.env');
 if (existsSync(rootEnv)) process.loadEnvFile(rootEnv);
 
-/** Extends app.json with the public Supabase connection settings. */
+/** Extends app.json with the public Supabase, PostHog and Expo project settings. */
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
   name: config.name ?? 'quote-to-cash',
@@ -16,5 +16,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     ...config.extra,
     supabaseUrl: process.env.SUPABASE_URL,
     supabaseAnonKey: process.env.SUPABASE_ANON_KEY,
+    posthogKey: process.env.POSTHOG_KEY,
+    posthogHost: process.env.POSTHOG_HOST,
+    // Expo push tokens are issued per EAS project.
+    eas: { ...config.extra?.eas, projectId: process.env.EXPO_PROJECT_ID },
   },
 });

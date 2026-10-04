@@ -14,6 +14,7 @@ import { cache, ONBOARDING_SEEN_KEY } from '../lib/cache';
 import { ConfigError } from '../lib/config';
 import { isNetworkError } from '../lib/errors';
 import { getSupabase } from '../lib/supabase';
+import { unregisterThisDevice } from '../notifications/expo';
 import { clearQuotes } from '../quotes/sync';
 
 export interface CurrentBusiness {
@@ -157,6 +158,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(async () => {
     const supabase = getSupabase();
+    // While still signed in: this phone stops getting the business's pushes.
+    await unregisterThisDevice().catch(() => undefined);
     const { error } = await supabase.auth.signOut();
     // Offline: the server-side revoke failed, but the device must still forget the session.
     if (error) await supabase.auth.signOut({ scope: 'local' });

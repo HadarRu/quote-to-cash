@@ -49,3 +49,10 @@ Ideas noted while building, intentionally **not** implemented yet.
 - A strict Content-Security-Policy with nonces for the web app.
 - Rate limits keyed by a trusted client IP header from the host, and a separate budget for the PDF
   renderer (its page loads come from the server's address).
+- Notifications: check Expo push receipts (delivery to Apple/Google, not just acceptance by Expo)
+  and mark DELIVERED; quiet hours; a reminder hour per business instead of 18:00.
+- Notifications: WhatsApp/SMS to customers (appointment reminder the day before), using the same
+  queue with `channel = 'whatsapp'`.
+- Action queue: point "schedule" and "create invoice" straight at the scheduling and invoice screens
+  once they exist (today they open the quote).
+- Notification inbox screen listing every push, not only the failed ones.

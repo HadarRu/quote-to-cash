@@ -28,6 +28,8 @@ insert into tests.tenant_table (name, key_col, updatable, update_col) values
   ('invoice_item', 'business_id', true, null),
   ('payment', 'business_id', true, null),
   ('notification', 'business_id', true, null),
+  ('device', 'business_id', false, null),
+  ('notification_preference', 'business_id', true, null),
   ('subscription', 'business_id', false, null),
   ('audit_log', 'business_id', false, null),
   ('file', 'business_id', true, null);

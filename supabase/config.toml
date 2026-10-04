@@ -402,6 +402,10 @@ deno_version = 2
 [functions.public-quote]
 verify_jwt = false
 
+# Called by the database (pg_net and pg_cron), authenticated by the x-notify-secret header.
+[functions.notify]
+verify_jwt = false
+
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 

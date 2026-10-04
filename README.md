@@ -234,6 +234,44 @@ and no app install.
 Deploy with `pnpm exec supabase functions deploy public-quote` (it needs `TOKEN_PEPPER`). The web
 app reads `SUPABASE_URL` and `SUPABASE_ANON_KEY` from the root `.env`.
 
+## Notifications and the action queue
+
+**Home is the action queue** (`action_queue()`, runs under RLS): quotes sent and not answered
+("send reminder" opens WhatsApp with a prefilled text), approved quotes with no appointment
+("schedule"), completed jobs with no invoice ("create invoice"), unpaid invoices with the amount
+due ("payment reminder" on WhatsApp), and pushes that never reached you ("got it" dismisses them).
+A big "new quote" button sits on top; with nothing waiting it shows a friendly empty state. The
+lists reload whenever the screen is shown, on pull-to-refresh and when a push arrives.
+
+**Push.** After sign-in the app asks for permission and registers its Expo push token through
+the `devices` Edge Function (`POST /devices`; `DELETE /devices` on sign-out). Database triggers
+queue one push per recipient in `notification` for: quote viewed, approved and rejected;
+appointment created and changed (moved, confirmed, cancelled); a reminder the evening before
+(from 18:00 business time); invoice issued; payment received. Recipients are the business's
+OWNER/ADMIN members and, for appointments, the assigned member, minus anyone who turned the event
+off in Settings → Notifications. The `notify` Edge Function claims queued pushes, sends them
+through Expo and records the outcome: rate limits and lost requests are retried up to 3 times;
+anything else (including no registered device) is FAILED and stays in the recipient's action
+queue. Tokens Expo no longer knows are removed.
+
+**Analytics.** The same triggers record `quote_created`, `quote_sent`, `quote_viewed`,
+`quote_approved`, `quote_rejected`, `appointment_created`, `job_completed`, `invoice_created`,
+`invoice_sent` and `payment_received` in `app.analytics_event` (ids and amounts only, no names or
+phone numbers); `notify` forwards them to PostHog. The app sends `app_opened` itself. Without
+`POSTHOG_KEY` nothing is sent.
+
+**Wiring `notify`.** pg_net calls it right after a push is queued and pg_cron every minute. Both
+read two Vault secrets and do nothing until they exist:
+
+```sql
+select vault.create_secret('https://<project>.supabase.co/functions/v1/notify', 'notify_url');
+select vault.create_secret('<same value as NOTIFY_SECRET>', 'notify_secret');
+```
+
+Deploy with `pnpm exec supabase functions deploy notify devices` and set `NOTIFY_SECRET` (and
+`POSTHOG_KEY`, optionally `POSTHOG_HOST` and `EXPO_ACCESS_TOKEN`) with `supabase secrets set`.
+Push tokens need the app's EAS project id in `EXPO_PROJECT_ID`.
+
 ## Quality checks
 
 The same commands run in CI (`.github/workflows/ci.yml`):
@@ -257,15 +295,19 @@ pnpm supabase:types && git diff --exit-code -- packages/types/src/database.types
 
 See `.env.example`. Secrets are never committed.
 
-| Variable                   | Used by                                         |
-| -------------------------- | ----------------------------------------------- |
-| `SUPABASE_URL`             | apps, Edge Functions                            |
-| `SUPABASE_ANON_KEY`        | apps                                            |
-| `TOKEN_PEPPER`             | Edge Functions only (server secret)             |
-| `SENTRY_DSN`               | error reporting                                 |
-| `POSTHOG_KEY`              | product analytics                               |
-| `PUBLIC_APP_URL`           | absolute links sent to customers (web base URL) |
-| `CHROMIUM_EXECUTABLE_PATH` | web PDF route: Chromium binary (optional)       |
+| Variable                   | Used by                                           |
+| -------------------------- | ------------------------------------------------- |
+| `SUPABASE_URL`             | apps, Edge Functions                              |
+| `SUPABASE_ANON_KEY`        | apps                                              |
+| `TOKEN_PEPPER`             | Edge Functions only (server secret)               |
+| `SENTRY_DSN`               | error reporting                                   |
+| `POSTHOG_KEY`              | product analytics (app and `notify`)              |
+| `POSTHOG_HOST`             | PostHog host (default `https://eu.i.posthog.com`) |
+| `EXPO_PROJECT_ID`          | app: EAS project for Expo push tokens             |
+| `EXPO_ACCESS_TOKEN`        | `notify`: Expo push security token (optional)     |
+| `NOTIFY_SECRET`            | `notify`: shared with Vault `notify_secret`       |
+| `PUBLIC_APP_URL`           | absolute links sent to customers (web base URL)   |
+| `CHROMIUM_EXECUTABLE_PATH` | web PDF route: Chromium binary (optional)         |
 
 ## Conventions
 

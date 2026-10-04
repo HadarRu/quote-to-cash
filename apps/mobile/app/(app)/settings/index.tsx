@@ -51,6 +51,12 @@ export default function Settings() {
         onPress={() => router.push('/settings/change-phone')}
       />
       <Button
+        testID="settings-notifications"
+        variant="secondary"
+        label={strings.settings.notifications}
+        onPress={() => router.push('/settings/notifications')}
+      />
+      <Button
         testID="settings-recovery-email"
         variant="secondary"
         label={strings.settings.setRecoveryEmail}
