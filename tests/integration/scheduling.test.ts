@@ -1,45 +1,26 @@
 // Critical paths 1 (the end: customer picks a date, an appointment exists) and 3
 // (two customers pick the same slot, exactly one wins), through
-// POST /public-quote/:token/schedule. PENDING: the scheduling stage (branch
-// claude/project-thread-2hpt5m, migration *_quote_scheduling.sql) is not on
-// main yet; this suite switches itself on once that migration is present.
-// Contract as given by that stage: send body `slots: [{ startsAt, endsAt }]`
+// POST /public-quote/:token/schedule. Send body `slots: [{ startsAt, endsAt }]`
 // (0 or 2-3), view `slots: [{ id, startsAt, endsAt, available }]` and
 // `appointment: { slotId, startsAt, endsAt } | null`.
-import { existsSync, readdirSync } from 'node:fs';
-import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import {
   adminClient,
   businesses,
   callFunction,
   createDraft,
   freshIp,
-  repoRoot,
   sendQuote,
   signIn,
   users,
+  visitPlanner,
 } from '../stack.ts';
 
-const migrations = join(repoRoot, 'supabase/migrations');
-const schedulingShipped =
-  existsSync(migrations) &&
-  readdirSync(migrations).some((f) => f.endsWith('_quote_scheduling.sql'));
+let slotTime: Awaited<ReturnType<typeof visitPlanner>>;
 
-/**
- * Each run books on its own days, so reruns on one database don't collide with
- * appointments booked by earlier runs.
- */
-const runDayOffset = Math.floor(Math.random() * 20 * 365);
-
-/** A 2-hour visit slot days out, at a random time of day. */
-function slotTime(daysAhead: number) {
-  const start = new Date();
-  start.setUTCDate(start.getUTCDate() + daysAhead + runDayOffset);
-  start.setUTCHours(0, Math.floor(Math.random() * 264) * 5, 0, 0);
-  const end = new Date(start.getTime() + 2 * 60 * 60 * 1000);
-  return { startsAt: start.toISOString(), endsAt: end.toISOString() };
-}
+beforeAll(async () => {
+  slotTime = await visitPlanner(businesses.a);
+});
 
 /** Sends a quote of business A proposing these slots, approves it as the customer. */
 async function approvedQuoteWithSlots(slots: { startsAt: string; endsAt: string }[]) {
@@ -70,7 +51,7 @@ const schedule = (token: string, slotId: string, ip: string) =>
     headers: { 'X-Forwarded-For': ip },
   });
 
-describe.skipIf(!schedulingShipped)('scheduling (pending on the scheduling stage)', () => {
+describe('scheduling', () => {
   it('the customer picks a date after approving, and a confirmed appointment exists', async () => {
     const quote = await approvedQuoteWithSlots([slotTime(20), slotTime(21)]);
     const res = await schedule(quote.token, quote.slots[1]!.id, quote.ip);

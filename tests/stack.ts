@@ -237,3 +237,27 @@ export function storageStatus(error: unknown): string | null {
   if (!error) return null;
   return String((error as { statusCode?: string | number }).statusCode ?? 'unknown');
 }
+
+/**
+ * Proposes 2-hour visits at 07:00 UTC, `daysAhead` days after every visit
+ * already booked for the business, so reruns on one database never offer a
+ * time an earlier run has taken.
+ */
+export async function visitPlanner(businessId: string) {
+  const { data, error } = await adminClient()
+    .from('appointment')
+    .select('ends_at')
+    .eq('business_id', businessId)
+    .order('ends_at', { ascending: false })
+    .limit(1);
+  if (error) throw error;
+  const base = new Date(Math.max(Date.now(), Date.parse(data[0]?.ends_at ?? '1970-01-01')));
+  base.setUTCHours(0, 0, 0, 0);
+  return (daysAhead: number) => {
+    const start = new Date(base);
+    start.setUTCDate(start.getUTCDate() + daysAhead);
+    start.setUTCHours(7);
+    const end = new Date(start.getTime() + 2 * 60 * 60 * 1000);
+    return { startsAt: start.toISOString(), endsAt: end.toISOString() };
+  };
+}

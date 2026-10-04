@@ -194,8 +194,8 @@ describe('offline quote: create, restart, reconnect, sync and send', () => {
 
     // The send reaches the server, but the connection drops before the answer.
     const realSend = phone.api.send;
-    phone.api.send = async (id, key) => {
-      await realSend(id, key);
+    phone.api.send = async (id, key, slots) => {
+      await realSend(id, key, slots);
       return { data: null, error: { message: 'Network request failed', retryable: true } };
     };
     await processOutbox(store, phone.api, { now: Date.now() });

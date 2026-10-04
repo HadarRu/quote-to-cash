@@ -9,7 +9,7 @@ Suites that need the local Supabase stack. Unit tests live next to the code in e
 | Security: token guessing, rate limits, XSS, uploads      | `integration/security.test.ts`                                                                                                  | `integration`               |
 | Critical path 2: offline quote, restart, reconnect, send | `integration/offline-sync.test.ts` (the app's own outbox, store and API) and `apps/mobile/.maestro/02-offline-quote-syncs.yaml` | `integration`, `mobile-e2e` |
 | Critical path 1: customer, quote, send, open, approve    | `portal/live.spec.ts` and `apps/mobile/.maestro/01-create-and-send-quote.yaml`                                                  | `integration`, `mobile-e2e` |
-| Critical paths 1 (booking) and 3 (same slot, one winner) | `integration/scheduling.test.ts`: skipped until the scheduling migration is merged                                              | `integration`               |
+| Critical paths 1 (booking) and 3 (same slot, one winner) | `integration/scheduling.test.ts`: book a visit, same-slot race, refused bookings                                                | `integration`               |
 | Customer portal states, validation, XSS rendering        | `portal/portal.spec.ts` (Edge Function stubbed)                                                                                 | `integration`               |
 
 ## Running locally

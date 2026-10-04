@@ -1,6 +1,7 @@
 // Critical path 1 across the real stack: the business creates a customer and a
-// quote and sends it (the same API calls the app makes), the customer opens the
-// link in a browser and approves, and the business sees the result.
+// quote and sends it with visit times (the same API calls the app makes), the
+// customer opens the link in a browser, approves, picks a date, and the business
+// sees the approval and a confirmed appointment.
 import { strings } from '@q2c/ui';
 import { expect, test } from '@playwright/test';
 import {
@@ -11,16 +12,21 @@ import {
   sendQuote,
   signIn,
   users,
+  visitPlanner,
 } from '../stack.ts';
 
 const t = strings.publicQuote;
 
-test('create customer and quote, send, customer opens and approves', async ({ page }) => {
+test('create customer and quote, send, customer opens, approves and picks a date', async ({
+  page,
+}) => {
   const owner = await signIn(users.ownerA.phone);
   const customerId = await createCustomer(owner, businesses.a, { fullName: 'נועה ברק' });
+  const slotTime = await visitPlanner(businesses.a);
   const sent = await sendQuote(
     owner,
     await createDraft(owner, businesses.a, { customerId, title: 'התקנת מזגן' }),
+    { slots: [slotTime(3), slotTime(4)] },
   );
   expect(sent.url).toMatch(/\/quote\/[A-Za-z0-9_-]{43}$/);
 
@@ -53,10 +59,32 @@ test('create customer and quote, send, customer opens and approves', async ({ pa
     .eq('quote_id', sent.quoteId);
   expect(comments).toEqual([{ body: 'מתי אפשר להתחיל?' }]);
 
-  // Reloading shows the approved quote with no way to answer again.
+  // The customer picks the second visit time.
+  const { data: slots } = await owner.client
+    .from('quote_slot_option')
+    .select('id, starts_at')
+    .eq('quote_id', sent.quoteId)
+    .order('starts_at');
+  expect(slots).toHaveLength(2);
+  await page.getByTestId(`slot-${slots![1]!.id}`).check();
+  await page.getByTestId('schedule-submit').click();
+  await expect(page.getByTestId('quote-appointment')).toBeVisible();
+
+  // The business sees a confirmed appointment at that time.
+  const { data: appointments } = await owner.client
+    .from('appointment')
+    .select('status, starts_at')
+    .eq('quote_id', sent.quoteId);
+  expect(appointments).toHaveLength(1);
+  expect(appointments![0]!.status).toBe('confirmed');
+  expect(Date.parse(appointments![0]!.starts_at)).toBe(Date.parse(slots![1]!.starts_at));
+
+  // Reloading shows the approved, booked quote with no way to answer again.
   await page.reload();
   await expect(page.getByTestId('quote-approval')).toBeVisible();
+  await expect(page.getByTestId('quote-appointment')).toBeVisible();
   await expect(page.getByTestId('quote-answer')).toHaveCount(0);
+  await expect(page.getByTestId('quote-schedule')).toHaveCount(0);
 });
 
 test('a revised quote: the old link says so, the new one opens', async ({ page }) => {

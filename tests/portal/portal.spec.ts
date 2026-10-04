@@ -19,6 +19,8 @@ function openView(overrides: Partial<QuoteSnapshot> = {}): PublicQuoteView {
     rejection: null,
     logoUrl: null,
     photoUrls: [],
+    slots: [],
+    appointment: null,
   };
 }
 

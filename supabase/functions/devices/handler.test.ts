@@ -87,4 +87,113 @@ describe('handleDevices', () => {
         .status,
     ).toBe(404);
   });
+
+  it('rejects a body that is not JSON', async () => {
+    const d = deps();
+    const response = await handleDevices(
+      new Request('http://localhost/devices', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer user-jwt' },
+        body: '{not json',
+      }),
+      d,
+    );
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: 'invalid_json' });
+    expect(d.register).not.toHaveBeenCalled();
+  });
+
+  it('requires a Bearer token, not just any Authorization header', async () => {
+    const d = deps();
+    const response = await handleDevices(request('DELETE', { token: TOKEN }, 'Basic abc'), d);
+    expect(response.status).toBe(401);
+    expect(await response.json()).toEqual({ error: 'not_authenticated' });
+    expect(d.unregister).not.toHaveBeenCalled();
+  });
+
+  it('validates the token when unregistering', async () => {
+    const d = deps();
+    const response = await handleDevices(request('DELETE', { token: 'abc' }), d);
+    expect(response.status).toBe(422);
+    expect(await response.json()).toEqual({ error: 'push_token_invalid' });
+    expect(d.unregister).not.toHaveBeenCalled();
+  });
+
+  it('answers unregister with ok, and maps its database errors', async () => {
+    const ok = await handleDevices(request('DELETE', { token: TOKEN }), deps());
+    expect(await ok.json()).toEqual({ ok: true });
+    const forbidden = await handleDevices(
+      request('DELETE', { token: TOKEN }),
+      deps({ unregister: async () => ({ error: { code: '42501', message: 'denied' } }) }),
+    );
+    expect(forbidden.status).toBe(403);
+    expect(await forbidden.json()).toEqual({ error: 'forbidden' });
+  });
+
+  it.each([
+    ['23514', 422, 'push_token_invalid'],
+    ['22P02', 422, 'push_token_invalid'],
+    ['PGRST301', 401, 'not_authenticated'],
+    ['401', 401, 'not_authenticated'],
+  ])('maps database error %s to %i %s', async (code, status, error) => {
+    const response = await handleDevices(
+      request('POST', { businessId: BUSINESS, token: TOKEN, platform: 'android' }),
+      deps({ register: async () => ({ data: null, error: { code, message: code } }) }),
+    );
+    expect(response.status).toBe(status);
+    expect(await response.json()).toEqual({ error });
+  });
+
+  it('answers 500 for an unknown database error or a missing id, and logs it', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const unknown = await handleDevices(
+      request('POST', { businessId: BUSINESS, token: TOKEN, platform: 'web' }),
+      deps({ register: async () => ({ data: null, error: { code: 'XX000', message: 'boom' } }) }),
+    );
+    expect(unknown.status).toBe(500);
+    expect(await unknown.json()).toEqual({ error: 'internal_error' });
+    const noId = await handleDevices(
+      request('POST', { businessId: BUSINESS, token: TOKEN, platform: 'web' }),
+      deps({ register: async () => ({ data: null, error: null }) }),
+    );
+    expect(noId.status).toBe(500);
+    expect(await noId.json()).toEqual({ error: 'internal_error' });
+    const unregister = await handleDevices(
+      request('DELETE', { token: TOKEN }),
+      deps({ unregister: async () => ({ error: { message: 'no code' } }) }),
+    );
+    expect(unregister.status).toBe(500);
+    expect(consoleError).toHaveBeenCalledTimes(3);
+    expect(consoleError).toHaveBeenCalledWith('devices: database error', null);
+    consoleError.mockRestore();
+  });
+
+  it('sends CORS headers that allow DELETE on every answer', async () => {
+    const preflight = await handleDevices(
+      new Request('http://localhost/devices', { method: 'OPTIONS' }),
+      deps(),
+    );
+    expect(await preflight.text()).toBe('ok');
+    expect(preflight.headers.get('Access-Control-Allow-Methods')).toBe('POST, DELETE, OPTIONS');
+    for (const response of [
+      await handleDevices(new Request('http://localhost/other', { method: 'POST' }), deps()),
+      await handleDevices(request('POST', { token: 'abc' }, null), deps()),
+      await handleDevices(request('DELETE', { token: TOKEN }), deps()),
+    ]) {
+      expect(response.headers.get('Access-Control-Allow-Methods')).toBe('POST, DELETE, OPTIONS');
+      expect(response.headers.get('Access-Control-Allow-Origin')).toBe('*');
+    }
+  });
+
+  it('accepts a trailing slash on the path', async () => {
+    const response = await handleDevices(
+      new Request('http://localhost/functions/v1/devices/', {
+        method: 'DELETE',
+        headers: { Authorization: 'Bearer user-jwt' },
+        body: JSON.stringify({ token: TOKEN }),
+      }),
+      deps(),
+    );
+    expect(response.status).toBe(200);
+  });
 });

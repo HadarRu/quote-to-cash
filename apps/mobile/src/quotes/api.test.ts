@@ -68,6 +68,32 @@ const row: Row = {
       deleted_at: null,
     },
   ],
+  quote_slot_option: [
+    {
+      id: 's2',
+      starts_at: '2026-10-08T07:00:00Z',
+      ends_at: '2026-10-08T09:00:00Z',
+      status: 'offered',
+      sort_order: 1,
+      deleted_at: null,
+    },
+    {
+      id: 'old',
+      starts_at: '2026-10-06T07:00:00Z',
+      ends_at: '2026-10-06T09:00:00Z',
+      status: 'offered',
+      sort_order: 0,
+      deleted_at: '2026-10-02T07:00:00Z',
+    },
+    {
+      id: 's1',
+      starts_at: '2026-10-07T07:00:00Z',
+      ends_at: '2026-10-07T09:00:00Z',
+      status: 'selected',
+      sort_order: 0,
+      deleted_at: null,
+    },
+  ],
 };
 
 describe('fromServerRow', () => {
@@ -84,6 +110,23 @@ describe('fromServerRow', () => {
     expect(quote.lines.map((l) => [l.id, l.quantity, l.priceText, l.vatIncluded])).toEqual([
       ['i1', '1', '250.5', false],
       ['i2', '1.5', '100', true],
+    ]);
+  });
+
+  it('keeps the offered visit times in order, without deleted ones', () => {
+    expect(fromServerRow(row).slots).toEqual([
+      {
+        id: 's1',
+        startsAt: '2026-10-07T07:00:00Z',
+        endsAt: '2026-10-07T09:00:00Z',
+        status: 'selected',
+      },
+      {
+        id: 's2',
+        startsAt: '2026-10-08T07:00:00Z',
+        endsAt: '2026-10-08T09:00:00Z',
+        status: 'offered',
+      },
     ]);
   });
 
@@ -131,9 +174,16 @@ describe('supabaseQuotesApi.send', () => {
       alreadySent: false,
     };
     const { api, supabase } = apiWith(async () => ({ data, error: null }));
-    expect(await api.send('q1', 'k1')).toEqual({ data, error: null });
+    expect(await api.send('q1', 'k1', undefined)).toEqual({ data, error: null });
     expect(supabase.functions.invoke).toHaveBeenCalledWith('quotes/q1/send', {
+      method: 'POST',
       body: { sendKey: 'k1' },
+    });
+    const slots = [{ startsAt: '2026-10-07T07:00:00Z', endsAt: '2026-10-07T09:00:00Z' }];
+    await api.send('q1', 'k2', slots);
+    expect(supabase.functions.invoke).toHaveBeenLastCalledWith('quotes/q1/send', {
+      method: 'POST',
+      body: { sendKey: 'k2', slots },
     });
   });
 
@@ -146,7 +196,7 @@ describe('supabaseQuotesApi.send', () => {
     [502, 'gateway', undefined, true],
   ])('HTTP %i → code %s, retryable %s', async (status, body, code, retryable) => {
     const { api } = apiWith(async () => ({ data: null, error: httpError(status, body) }));
-    const result = await api.send('q1', 'k1');
+    const result = await api.send('q1', 'k1', undefined);
     expect(result.error).toMatchObject({ code, retryable });
   });
 
@@ -155,11 +205,11 @@ describe('supabaseQuotesApi.send', () => {
       data: null,
       error: new FunctionsFetchError(new TypeError('Network request failed')),
     }));
-    expect((await relay.api.send('q1', 'k1')).error?.retryable).toBe(true);
+    expect((await relay.api.send('q1', 'k1', undefined)).error?.retryable).toBe(true);
     const thrown = apiWith(async () => {
       throw new TypeError('Network request failed');
     });
-    expect((await thrown.api.send('q1', 'k1')).error?.retryable).toBe(true);
+    expect((await thrown.api.send('q1', 'k1', undefined)).error?.retryable).toBe(true);
   });
 });
 

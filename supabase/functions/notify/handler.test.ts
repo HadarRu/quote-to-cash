@@ -5,6 +5,8 @@ import { pushContent } from './content.ts';
 import {
   deliver,
   handleNotify,
+  MAX_PUSH_BATCHES,
+  PUSH_BATCH,
   type AnalyticsRow,
   type Deps,
   type PushJob,
@@ -254,6 +256,70 @@ describe('push failure fallback', () => {
     expect(results[0]).toMatchObject({ ok: true, invalid_tokens: ['ExponentPushToken[old]'] });
   });
 
+  it('a push Expo returned no ticket for fails as unknown', async () => {
+    const results = await deliver([job('quote_viewed', { quote_id: QUOTE })], async () => []);
+    expect(results[0]).toMatchObject({
+      ok: false,
+      retry: false,
+      error: 'unknown',
+      invalid_tokens: [],
+    });
+  });
+
+  it('a ticket error without details is reported by its message', async () => {
+    const results = await deliver([job('quote_viewed', { quote_id: QUOTE })], async (messages) =>
+      messages.map(() => ({ status: 'error', message: 'InvalidCredentials' })),
+    );
+    expect(results[0]).toMatchObject({ ok: false, retry: false, error: 'InvalidCredentials' });
+  });
+
+  it('a failure to claim pushes is a 500 and nothing is sent', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { deps, sent } = fakeDeps([job('quote_viewed', { quote_id: QUOTE })]);
+    deps.claimPushes = async () => ({ data: null, error: { message: 'locked' } });
+    const response = await handleNotify(post(), deps);
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({ error: 'internal_error' });
+    expect(sent).toHaveLength(0);
+    expect(consoleError).toHaveBeenCalledWith(
+      'notify failed',
+      new Error('claim_push_notifications: locked'),
+    );
+    consoleError.mockRestore();
+  });
+
+  it('keeps claiming full batches, up to the per-run limit', async () => {
+    const queue = Array.from({ length: PUSH_BATCH + 1 }, () =>
+      job('quote_viewed', { quote_id: QUOTE }),
+    );
+    const { deps } = fakeDeps(queue);
+    const response = await handleNotify(post(), deps);
+    expect(await response.json()).toMatchObject({ sent: PUSH_BATCH + 1 });
+    expect(deps.claimPushes).toHaveBeenCalledTimes(2);
+
+    const backlog = Array.from({ length: MAX_PUSH_BATCHES * PUSH_BATCH + 5 }, () =>
+      job('quote_viewed', { quote_id: QUOTE }),
+    );
+    const capped = fakeDeps(backlog);
+    const summary = await (await handleNotify(post(), capped.deps)).json();
+    expect(summary).toMatchObject({ sent: MAX_PUSH_BATCHES * PUSH_BATCH });
+    expect(capped.deps.claimPushes).toHaveBeenCalledTimes(MAX_PUSH_BATCHES);
+    expect(backlog).toHaveLength(5);
+  });
+
+  it('a claim with no rows ends the run', async () => {
+    const { deps } = fakeDeps([]);
+    deps.claimPushes = vi.fn(async () => ({ data: null, error: null }));
+    expect(await (await handleNotify(post(), deps)).json()).toEqual({
+      reminders: 0,
+      sent: 0,
+      retried: 0,
+      failed: 0,
+      analytics: 1,
+    });
+    expect(deps.completePushes).not.toHaveBeenCalled();
+  });
+
   it('a database failure is a 500 so the next run tries again', async () => {
     const { deps } = fakeDeps([job('quote_viewed', { quote_id: QUOTE })]);
     deps.completePushes = async () => ({ error: { message: 'boom' } });
@@ -293,6 +359,36 @@ describe('analytics forwarding', () => {
     await handleNotify(post(), off.deps);
     expect(off.deps.claimAnalytics).not.toHaveBeenCalled();
   });
+  it('keeps going when claiming or marking analytics fails', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const claimFails = fakeDeps([]);
+    claimFails.deps.claimAnalytics = async () => ({ data: null, error: { message: 'boom' } });
+    const response = await handleNotify(post(), claimFails.deps);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ analytics: 0 });
+    expect(claimFails.deps.capture).not.toHaveBeenCalled();
+    expect(consoleError).toHaveBeenCalledWith('notify: claim_analytics_events failed', {
+      message: 'boom',
+    });
+
+    const markFails = fakeDeps([]);
+    markFails.deps.markAnalyticsSent = async () => ({ error: { message: 'boom' } });
+    expect(await (await handleNotify(post(), markFails.deps)).json()).toMatchObject({
+      analytics: 1,
+    });
+    expect(consoleError).toHaveBeenCalledWith('notify: mark_analytics_sent failed', {
+      message: 'boom',
+    });
+    consoleError.mockRestore();
+  });
+
+  it('does not call PostHog when the outbox is empty', async () => {
+    const { deps } = fakeDeps([]);
+    deps.claimAnalytics = vi.fn(async () => ({ data: null, error: null }));
+    expect(await (await handleNotify(post(), deps)).json()).toMatchObject({ analytics: 0 });
+    expect(deps.capture).not.toHaveBeenCalled();
+    expect(deps.markAnalyticsSent).not.toHaveBeenCalled();
+  });
 });
 
 describe('reminders', () => {
@@ -300,5 +396,33 @@ describe('reminders', () => {
     const { deps } = fakeDeps([]);
     await handleNotify(post(), deps);
     expect(deps.enqueueReminders).toHaveBeenCalledWith(new Date('2026-10-04T16:00:00Z'));
+  });
+
+  it('reports how many reminders were queued', async () => {
+    const { deps } = fakeDeps([]);
+    deps.enqueueReminders = vi.fn(async () => ({ data: 3, error: null }));
+    expect(await (await handleNotify(post(), deps)).json()).toMatchObject({ reminders: 3 });
+  });
+
+  it('a reminders failure is logged and the pushes still go out', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { deps, sent } = fakeDeps([job('quote_viewed', { quote_id: QUOTE })]);
+    deps.enqueueReminders = vi.fn(async () => ({ data: null, error: { message: 'boom' } }));
+    const response = await handleNotify(post(), deps);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ reminders: 0, sent: 1 });
+    expect(sent).toHaveLength(1);
+    expect(consoleError).toHaveBeenCalledWith('notify: reminders failed', { message: 'boom' });
+    consoleError.mockRestore();
+  });
+
+  it('uses the current time when no clock is given', async () => {
+    const { deps } = fakeDeps([]);
+    delete deps.now;
+    const before = Date.now();
+    await handleNotify(post(), deps);
+    const at = vi.mocked(deps.enqueueReminders).mock.calls[0]![0];
+    expect(at.getTime()).toBeGreaterThanOrEqual(before);
+    expect(at.getTime()).toBeLessThanOrEqual(Date.now());
   });
 });

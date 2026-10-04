@@ -36,6 +36,8 @@ const TABLES = [
   ['invoice_item', 'business_id'],
   ['payment', 'business_id'],
   ['notification', 'business_id'],
+  ['device', 'business_id'],
+  ['notification_preference', 'business_id'],
   ['subscription', 'business_id'],
   ['audit_log', 'business_id'],
   ['file', 'business_id'],
