@@ -1,0 +1,69 @@
+# Critical path 1, the business's side: create a customer and a quote, send it,
+# get the customer link. (The customer's side, approving and booking a visit,
+# runs in the browser: tests/portal/live.spec.ts and tests/integration.)
+appId: com.quotetocash.app
+name: Create customer and quote, send
+---
+- runFlow:
+    file: subflows/sign-in.yaml
+    env:
+      PHONE: '0500000001' # owner A
+- tapOn:
+    id: home-new-quote
+- extendedWaitUntil:
+    visible:
+      id: quote-section-customer
+    timeout: 15000
+- tapOn: 'לקוח חדש'
+- tapOn:
+    id: customer-name
+- inputText: 'Maestro Customer'
+- tapOn:
+    id: customer-phone
+- inputText: '0521234567'
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      id: customer-save
+- tapOn:
+    id: customer-save
+- extendedWaitUntil:
+    visible:
+      id: customer-new-quote
+    timeout: 15000
+- tapOn:
+    id: customer-new-quote
+# The customer is already chosen, so its section opens collapsed with the name as summary.
+- extendedWaitUntil:
+    visible:
+      id: quote-add-free-line
+    timeout: 15000
+- assertVisible: 'Maestro Customer'
+- runFlow:
+    file: subflows/add-free-line.yaml
+    env:
+      LINE: 'Living room socket'
+- assertVisible:
+    id: quote-floating-total
+    text: '.*590.*'
+- tapOn:
+    id: quote-preview
+- extendedWaitUntil:
+    visible:
+      id: quote-send
+    timeout: 15000
+- tapOn:
+    id: quote-send
+- extendedWaitUntil:
+    visible:
+      id: quote-sent
+    timeout: 30000
+- assertVisible:
+    id: quote-share-link
+- tapOn:
+    id: quote-to-details
+- extendedWaitUntil:
+    visible:
+      id: quote-status
+      text: '.*נשלחה.*'
+    timeout: 15000

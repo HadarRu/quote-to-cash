@@ -46,5 +46,8 @@ pnpm format:check   # prettier --check .
 pnpm typecheck      # turbo run typecheck
 pnpm lint           # turbo run lint
 pnpm test           # turbo run test (Vitest)
+pnpm coverage       # merged unit-test coverage report in coverage/
 pnpm build          # turbo run build (next build + expo export)
 ```
+
+Integration and E2E suites need the local Supabase stack; see `tests/README.md` (`pnpm test:integration`, `pnpm test:e2e`, Maestro flows in `apps/mobile/.maestro`).

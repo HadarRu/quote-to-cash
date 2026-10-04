@@ -315,6 +315,289 @@ describe('invoices handler: issue, send, pay, void', () => {
   });
 });
 
+/** A provider registered under the manual id that is not ManualInvoiceProvider. */
+function remoteProvider(overrides: Partial<InvoiceProvider> = {}) {
+  const provider: InvoiceProvider = {
+    id: 'manual',
+    createInvoice: vi.fn(async () => ({
+      status: 'issued' as InvoiceStatus,
+      documentNumber: 'R-1',
+      providerDocumentId: 'ext-1',
+    })),
+    getStatus: vi.fn(async () => ({ status: 'issued' as InvoiceStatus })),
+    voidInvoice: vi.fn(async () => ({ status: 'voided' as InvoiceStatus })),
+    ...overrides,
+  };
+  return new InvoiceProviderRegistry([provider]);
+}
+
+describe('invoices handler: request checks', () => {
+  it('answers CORS preflight and 404 for unknown paths', async () => {
+    const { d } = setup();
+    const preflight = await handleInvoices(
+      new Request('http://localhost/invoices', { method: 'OPTIONS' }),
+      d,
+    );
+    expect(preflight.status).toBe(200);
+    expect(await preflight.text()).toBe('ok');
+    expect(await call(d, '/not-a-uuid/sent')).toEqual({
+      status: 404,
+      body: { error: 'not_found' },
+    });
+    expect(await call(d, '/90000000-0000-4000-a000-000000000001/refund')).toEqual({
+      status: 404,
+      body: { error: 'not_found' },
+    });
+  });
+
+  it('allows GET only for the status and POST only for actions', async () => {
+    const { d } = setup();
+    expect(await call(d, '/90000000-0000-4000-a000-000000000001/sent', undefined, 'GET')).toEqual({
+      status: 405,
+      body: { error: 'method_not_allowed' },
+    });
+    expect(await call(d, '/90000000-0000-4000-a000-000000000001', {})).toEqual({
+      status: 405,
+      body: { error: 'method_not_allowed' },
+    });
+  });
+
+  it('requires a Bearer token before asking who the user is', async () => {
+    const { d } = setup();
+    const res = await handleInvoices(
+      new Request('http://localhost/invoices', {
+        method: 'POST',
+        headers: { Authorization: 'Basic abc' },
+        body: JSON.stringify({ jobId: JOB_ID, idempotencyKey: KEY }),
+      }),
+      d,
+    );
+    expect(res.status).toBe(401);
+    expect(await res.json()).toEqual({ error: 'not_authenticated' });
+    expect(d.getUserId).not.toHaveBeenCalled();
+  });
+
+  it('rejects a body that is not JSON', async () => {
+    const { d, db } = setup();
+    const res = await handleInvoices(
+      new Request('http://localhost/invoices', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer jwt' },
+        body: '{not json',
+      }),
+      d,
+    );
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: 'invalid_json' });
+    expect(db.createInvoice).not.toHaveBeenCalled();
+  });
+
+  it('matches the invoice id and action case-insensitively', async () => {
+    const { d } = setup();
+    const id = (await create(d)).body.invoiceId as string;
+    await call(d, `/${id}/issue`, { documentNumber: '1' });
+    expect((await call(d, `/${id.toUpperCase()}/SENT`)).body).toEqual({
+      invoiceId: id,
+      status: 'sent',
+      alreadyDone: false,
+    });
+    expect(d.loadInvoice).toHaveBeenLastCalledWith('Bearer jwt', id);
+  });
+});
+
+describe('invoices handler: database and provider failures', () => {
+  it('maps create_invoice refusals and unknown errors', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { d } = setup();
+    expect(await create(d, '81000000-0000-4000-a000-000000000009')).toEqual({
+      status: 404,
+      body: { error: 'job_not_found' },
+    });
+    d.createInvoice = vi.fn(async () => ({ data: null, error: { code: '22023', message: 'x' } }));
+    expect(await create(d)).toEqual({ status: 422, body: { error: 'job_has_no_quote' } });
+    d.createInvoice = vi.fn(async () => ({ data: null, error: { code: 'XX000', message: 'x' } }));
+    expect(await create(d)).toEqual({ status: 500, body: { error: 'internal_error' } });
+    d.createInvoice = vi.fn(async () => ({ data: null, error: null }));
+    expect(await create(d)).toEqual({ status: 500, body: { error: 'internal_error' } });
+    expect(consoleError).toHaveBeenCalledWith('invoices: create failed', null);
+    consoleError.mockRestore();
+  });
+
+  it('answers 500 when the invoice cannot be read, 404 when it is not visible', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const failing = setup({
+      loadInvoice: vi.fn(async () => ({ data: null, error: { message: 'timeout' } })),
+    });
+    expect(await create(failing.d)).toEqual({ status: 500, body: { error: 'internal_error' } });
+    expect(
+      await call(failing.d, '/90000000-0000-4000-a000-000000000001', undefined, 'GET'),
+    ).toEqual({ status: 500, body: { error: 'internal_error' } });
+    expect(consoleError).toHaveBeenCalledWith('invoices: load failed', { message: 'timeout' });
+    consoleError.mockRestore();
+
+    const hidden = setup({ loadInvoice: vi.fn(async () => ({ data: null, error: null })) });
+    expect(await create(hidden.d)).toEqual({ status: 404, body: { error: 'invoice_not_found' } });
+  });
+
+  it('maps transition_invoice refusals for an existing invoice', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { d } = setup();
+    const id = (await create(d)).body.invoiceId as string;
+    const refuse = (code?: string) =>
+      vi.fn<Deps['transitionInvoice']>(async () => ({ data: null, error: { code, message: 'x' } }));
+    d.transitionInvoice = refuse('42501');
+    expect(await call(d, `/${id}/issue`, { documentNumber: '1' })).toEqual({
+      status: 404,
+      body: { error: 'invoice_not_found' },
+    });
+    d.transitionInvoice = refuse('22023');
+    expect(await call(d, `/${id}/issue`, { documentNumber: '1' })).toEqual({
+      status: 422,
+      body: { error: 'validation_failed' },
+    });
+    d.transitionInvoice = refuse();
+    expect(await call(d, `/${id}/issue`, { documentNumber: '1' })).toEqual({
+      status: 500,
+      body: { error: 'internal_error' },
+    });
+    expect(consoleError).toHaveBeenCalledWith('invoices: issue failed', {
+      code: undefined,
+      message: 'x',
+    });
+    consoleError.mockRestore();
+  });
+
+  it('a retried create does not hand an issued invoice to the provider again', async () => {
+    const { d } = setup();
+    const id = (await create(d)).body.invoiceId as string;
+    await call(d, `/${id}/issue`, { documentNumber: '1' });
+    const createInvoice = vi.spyOn(d.providers.get('manual'), 'createInvoice');
+    expect(await create(d)).toEqual({
+      status: 200,
+      body: { invoiceId: id, status: 'issued', alreadyDone: true },
+    });
+    expect(createInvoice).not.toHaveBeenCalled();
+  });
+
+  it('records a provider failure without a reason, and a non-Error throw as text', async () => {
+    const silent = setup({
+      providers: remoteProvider({
+        createInvoice: vi.fn<InvoiceProvider['createInvoice']>(async () => ({ status: 'failed' })),
+      }),
+    });
+    expect((await create(silent.d)).body).toMatchObject({ status: 'failed', alreadyDone: false });
+    expect(silent.db.transitionInvoice.mock.calls[0]![0].p_details).toEqual({ reason: null });
+
+    const throwing = setup({
+      providers: remoteProvider({
+        createInvoice: vi.fn(async () => {
+          throw 'socket hang up';
+        }),
+      }),
+    });
+    await create(throwing.d);
+    expect(throwing.db.transitionInvoice.mock.calls[0]![0].p_details).toEqual({
+      reason: 'socket hang up',
+    });
+  });
+
+  it('records an issued document without numbers as nulls', async () => {
+    const { d, db } = setup({
+      providers: remoteProvider({
+        createInvoice: vi.fn<InvoiceProvider['createInvoice']>(async () => ({ status: 'issued' })),
+      }),
+    });
+    // The database requires a document number for ISSUED; the refusal is
+    // reported with the create endpoint's error key.
+    expect(await create(d)).toEqual({ status: 422, body: { error: 'job_has_no_quote' } });
+    expect(db.transitionInvoice.mock.calls[0]![0].p_details).toEqual({
+      document_number: null,
+      provider_document_id: null,
+    });
+  });
+
+  it('refreshes the status: records a move the provider reports, 502 when it fails', async () => {
+    const getStatus = vi.fn<InvoiceProvider['getStatus']>(async () => ({ status: 'sent' }));
+    const { d, db } = setup({ providers: remoteProvider({ getStatus }) });
+    const id = (await create(d)).body.invoiceId as string;
+    expect((await call(d, `/${id}`, undefined, 'GET')).body).toEqual({
+      invoiceId: id,
+      status: 'sent',
+      alreadyDone: false,
+    });
+    expect(db.transitionInvoice).toHaveBeenLastCalledWith(
+      expect.objectContaining({ p_status: 'sent', p_details: {} }),
+    );
+
+    // A status the invoice cannot move to is ignored.
+    getStatus.mockResolvedValueOnce({ status: 'not_issued' });
+    expect((await call(d, `/${id}`, undefined, 'GET')).body).toEqual({
+      invoiceId: id,
+      status: 'sent',
+      alreadyDone: false,
+    });
+
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    getStatus.mockRejectedValueOnce(new Error('provider down'));
+    expect(await call(d, `/${id}`, undefined, 'GET')).toEqual({
+      status: 502,
+      body: { error: 'invoice_provider_failed' },
+    });
+    consoleError.mockRestore();
+  });
+
+  it('only a manual provider takes a document number from the owner', async () => {
+    const { d } = setup({ providers: remoteProvider() });
+    const id = (await create(d)).body.invoiceId as string;
+    expect(await call(d, `/${id}/issue`, { documentNumber: '1' })).toEqual({
+      status: 409,
+      body: { error: 'invoice_not_manual' },
+    });
+  });
+
+  it('marking a paid invoice as sent changes nothing', async () => {
+    const { d, db } = setup();
+    const id = (await create(d)).body.invoiceId as string;
+    await call(d, `/${id}/issue`, { documentNumber: '1' });
+    await call(d, `/${id}/paid`, { method: 'cash', paidAt: '2026-10-04T12:00:00+03:00' });
+    expect(db.transitionInvoice).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        p_details: { method: 'cash', paid_at: '2026-10-04T12:00:00+03:00' },
+      }),
+    );
+    db.transitionInvoice.mockClear();
+    expect(await call(d, `/${id}/sent`)).toEqual({
+      status: 200,
+      body: { invoiceId: id, status: 'paid', alreadyDone: true },
+    });
+    expect(db.transitionInvoice).not.toHaveBeenCalled();
+  });
+
+  it('void: validates the reason and answers 502 when the provider does not void', async () => {
+    const voidInvoice = vi.fn<InvoiceProvider['voidInvoice']>(async () => ({ status: 'issued' }));
+    const { d, db } = setup({ providers: remoteProvider({ voidInvoice }) });
+    const id = (await create(d)).body.invoiceId as string;
+    expect(await call(d, `/${id}/void`, { reason: 'x'.repeat(501) })).toEqual({
+      status: 422,
+      body: { error: 'void_reason_too_long' },
+    });
+    expect(await call(d, `/${id}/void`, { reason: 'טעות' })).toEqual({
+      status: 502,
+      body: { error: 'invoice_provider_failed' },
+    });
+    expect(voidInvoice).toHaveBeenCalledWith(expect.objectContaining({ id }), 'טעות');
+
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    voidInvoice.mockRejectedValueOnce(new Error('provider down'));
+    expect(await call(d, `/${id}/void`, {})).toEqual({
+      status: 502,
+      body: { error: 'invoice_provider_failed' },
+    });
+    consoleError.mockRestore();
+    expect(db.invoices.get(id)!.status).toBe('issued');
+  });
+});
+
 describe('ManualInvoiceProvider', () => {
   const provider = new ManualInvoiceProvider();
   const invoice = toInvoiceDocument({

@@ -1,0 +1,32 @@
+# Fresh install, then sign in as the seeded user with phone env PHONE (seed.sql),
+# using the local test OTP. Each flow uses its own phone: Auth allows one code
+# request per phone per minute.
+appId: com.quotetocash.app
+---
+- launchApp:
+    clearState: true
+- runFlow:
+    when:
+      visible:
+        id: onboarding-skip
+    commands:
+      - tapOn:
+          id: onboarding-skip
+- extendedWaitUntil:
+    visible:
+      id: sign-in-phone
+    timeout: 60000
+- tapOn:
+    id: sign-in-phone
+- inputText: '${PHONE}'
+- tapOn:
+    id: sign-in-send
+- tapOn:
+    id: sign-in-code
+- inputText: '123456'
+- tapOn:
+    id: sign-in-verify
+- extendedWaitUntil:
+    visible:
+      id: home-new-quote
+    timeout: 30000

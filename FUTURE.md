@@ -63,3 +63,5 @@ Ideas noted while building, intentionally **not** implemented yet.
 - Credit notes for paid invoices (today a PAID invoice cannot be voided).
 - Due dates on invoices with automatic payment reminders (today the owner sends each reminder).
 - Store the invoice PDF from a provider in Storage (`file.kind = 'invoice_pdf'`).
+- Tests: run the Maestro flows on iOS too, and one cross-device flow where the link the app sends is
+  opened and approved in the browser.
