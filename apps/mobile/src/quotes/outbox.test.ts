@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { SendQuoteResponse } from '@q2c/types';
+import type { QuoteSlot, SendQuoteResponse } from '@q2c/types';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { newDraft, toServerDraft, type LocalQuote, type ServerDraftPayload } from './model.ts';
 import { processOutbox, type ApiError, type QuotesApi } from './outbox.ts';
@@ -14,7 +14,7 @@ const offline: ApiError = { message: 'TypeError: Network request failed', retrya
 function fakeServer() {
   const drafts = new Map<string, ServerDraftPayload & { status: string }>();
   const photos = new Map<string, boolean>();
-  const sends = new Map<string, { key: string; number: number }>();
+  const sends = new Map<string, { key: string; number: number; slots: QuoteSlot[] }>();
   let nextNumber = 1;
   const state = { online: true, loseNextSendResponse: false, calls: [] as string[] };
   const api: QuotesApi = {
@@ -41,7 +41,7 @@ function fakeServer() {
       photos.set(photoId, false);
       return { data: null, error: null };
     },
-    async send(quoteId, sendKey) {
+    async send(quoteId, sendKey, slots = []) {
       state.calls.push(`send:${quoteId}`);
       if (!state.online) return { data: null, error: offline };
       const draft = drafts.get(quoteId);
@@ -52,7 +52,7 @@ function fakeServer() {
         return { data: null, error: { code: 'quote_not_draft', message: '', retryable: false } };
       const alreadySent = !!sent;
       if (!sent) {
-        sent = { key: sendKey, number: nextNumber++ };
+        sent = { key: sendKey, number: nextNumber++, slots };
         sends.set(quoteId, sent);
         draft.status = 'sent';
       }
@@ -191,6 +191,20 @@ describe('outbox', () => {
       `save:${uuid(1)}:1`,
       `send:${uuid(1)}`,
     ]);
+  });
+
+  it('sends the proposed visit times with the quote, and a second tap keeps the first ones', async () => {
+    const server = fakeServer();
+    const store = await openStore();
+    await save(store, draftWithLines(uuid(1), 1));
+    const slots = [
+      { startsAt: '2026-10-06T05:00:00.000Z', endsAt: '2026-10-06T07:00:00.000Z' },
+      { startsAt: '2026-10-07T05:00:00.000Z', endsAt: '2026-10-07T07:00:00.000Z' },
+    ];
+    await store.queueSend(uuid(1), uuid(900), slots);
+    await store.queueSend(uuid(1), uuid(901), []);
+    await processOutbox(store, server.api, { now: 0 });
+    expect(server.sends.get(uuid(1))).toEqual({ key: uuid(900), number: 1, slots });
   });
 
   it('retries a send whose response was lost with the same key: one number, never two', async () => {

@@ -1,4 +1,4 @@
-import { canQuote } from '@q2c/types';
+import { canQuote, QuoteSlotsSchema, slotsInFuture } from '@q2c/types';
 import { errorMessage, format, strings } from '@q2c/ui';
 import { randomUUID } from 'expo-crypto';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -15,6 +15,8 @@ import { Screen } from '../../../../src/components/Screen';
 import { useQuote, useQuotePhotos } from '../../../../src/quotes/hooks';
 import { displayTotals, type QuoteListItem } from '../../../../src/quotes/model';
 import { QuoteDocument } from '../../../../src/quotes/QuoteDocument';
+import { SlotPicker } from '../../../../src/quotes/SlotPicker';
+import { toSlot, type SlotChoice } from '../../../../src/quotes/slots';
 import { getQuoteStore, notifyQuotesChanged, syncQuotes } from '../../../../src/quotes/sync';
 
 /** The quote exactly as the customer will see it, and the Send button. */
@@ -24,6 +26,8 @@ export default function PreviewQuote() {
   const { state, reload } = useQuote(id);
   const { photos } = useQuotePhotos(id, business.id);
   const logoUrl = useLogoUrl(business.logoPath);
+  // Proposed visit times, sent with the quote.
+  const [choices, setChoices] = useState<SlotChoice[]>([]);
 
   if (state.status === 'loading') return <LoadingView />;
   if (state.status === 'error')
@@ -46,27 +50,46 @@ export default function PreviewQuote() {
     );
 
   return (
-    <Screen title={strings.quotes.previewTitle} footer={<SendPanel quote={quote} />}>
+    <Screen
+      title={strings.quotes.previewTitle}
+      footer={<SendPanel quote={quote} choices={choices} />}
+    >
       <QuoteDocument
         quote={quote}
         totals={displayTotals(quote, business.vatRateBp)}
         business={{ name: business.name, logoUrl }}
         photoUris={(photos ?? []).flatMap((p) => (p.uri ? [p.uri] : []))}
       />
+      {quote.status === 'draft' && !quote.pendingSend ? (
+        <SlotPicker value={choices} onChange={setChoices} />
+      ) : null}
     </Screen>
   );
 }
 
 /** Send, then: sent (share links), waiting for a connection, or refused. */
-function SendPanel({ quote }: { quote: QuoteListItem }) {
+function SendPanel({ quote, choices }: { quote: QuoteListItem; choices: SlotChoice[] }) {
   // One key for this quote's send; queueSend keeps the first one on repeated taps.
   const [sendKey] = useState(() => randomUUID());
   const [sending, setSending] = useState(false);
+  // Shown until the times change.
+  const [refused, setRefused] = useState<{ choices: SlotChoice[]; error: string } | null>(null);
+  const slotError = refused?.choices === choices ? refused.error : null;
+  const setSlotError = (error: string) => setRefused({ choices, error });
 
   const send = async () => {
+    // Same rules as the server (packages/types): none, or 2-3 future times that do not overlap.
+    const slots = choices.map(toSlot);
+    if (slots.length) {
+      const parsed = QuoteSlotsSchema.safeParse(slots);
+      if (!parsed.success)
+        return setSlotError(errorMessage(parsed.error.issues[0]?.message ?? 'generic'));
+      if (!slotsInFuture(slots, new Date())) return setSlotError(errorMessage('slot_in_past'));
+    }
+    setRefused(null);
     setSending(true);
     const store = await getQuoteStore();
-    await store.queueSend(quote.id, sendKey);
+    await store.queueSend(quote.id, sendKey, slots);
     notifyQuotesChanged();
     await syncQuotes(true);
     setSending(false);
@@ -154,6 +177,7 @@ function SendPanel({ quote }: { quote: QuoteListItem }) {
 
   return (
     <>
+      {slotError ? <Banner tone="error" testID="quote-slots-error" message={slotError} /> : null}
       <Button
         testID="quote-send"
         label={sending ? strings.quotes.sending : strings.quotes.send}

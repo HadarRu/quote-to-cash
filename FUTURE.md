@@ -15,7 +15,6 @@ Ideas noted while building, intentionally **not** implemented yet.
 - Finer role permissions (e.g. EMPLOYEE cannot edit the service catalog, prices or settings).
 - Storage bucket + Storage RLS policies matching `public.file` rows.
 - Automatic audit triggers on business tables writing to `audit_log`.
-- Lock issued invoices against edits (Israeli tax rules), with credit notes for corrections.
 - Team invites by phone number (`business_member.status = 'invited'` before the user exists).
 - Zod enum schemas derived from `Constants` in the generated database types.
 - Store the session in the device keychain (expo-secure-store with an encrypted AsyncStorage
@@ -42,12 +41,27 @@ Ideas noted while building, intentionally **not** implemented yet.
   token expiry today).
 - Customer page: notify the business (push / WhatsApp) when a quote is viewed, approved, rejected or
   commented on, and show customer comments in the app with replies.
-- Customer page: let the customer pick one of the offered time slots (`quote_slot_option`) when
-  approving.
 - PDF: store the approved quote's PDF in Storage (`file.kind`) instead of rendering on every download,
   and package Chromium for the serverless host.
 - A strict Content-Security-Policy with nonces for the web app.
 - Rate limits keyed by a trusted client IP header from the host, and a separate budget for the PDF
   renderer (its page loads come from the server's address).
+- Notifications: check Expo push receipts (delivery to Apple/Google, not just acceptance by Expo)
+  and mark DELIVERED; quiet hours; a reminder hour per business instead of 18:00.
+- Notifications: WhatsApp/SMS to customers (appointment reminder the day before), using the same
+  queue with `channel = 'whatsapp'`.
+- Action queue: point "schedule" and "create invoice" straight at the scheduling and invoice screens
+  once they exist (today they open the quote).
+- Notification inbox screen listing every push, not only the failed ones.
+- Scheduling: let the owner reschedule or cancel a booked visit from the app (release the SELECTED
+  time so the customer can pick again), create the job when a visit is booked, notify the owner
+  when the customer books, and show all visits on a calendar.
+- Invoicing providers that issue the legal document themselves (e.g. Green Invoice / Morning,
+  iCount, EZcount), including Tax Authority allocation numbers.
+- Partial payments and several payments per invoice (today "mark paid" records one payment for the
+  full total).
+- Credit notes for paid invoices (today a PAID invoice cannot be voided).
+- Due dates on invoices with automatic payment reminders (today the owner sends each reminder).
+- Store the invoice PDF from a provider in Storage (`file.kind = 'invoice_pdf'`).
 - Tests: run the Maestro flows on iOS too, and one cross-device flow where the link the app sends is
   opened and approved in the browser.

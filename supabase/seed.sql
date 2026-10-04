@@ -120,8 +120,9 @@ begin
             v_tomorrow_9, v_tomorrow_9 + interval '2 hours');
 
     insert into public.invoice (business_id, customer_id, quote_id, job_id, status, issued_at,
-                                due_date, subtotal_minor, vat_rate_bp, vat_minor, total_minor)
-    values (b.id, v_customer, v_quote, v_job, 'issued', now(), current_date + 30,
+                                document_number, due_date, subtotal_minor, vat_rate_bp, vat_minor,
+                                total_minor)
+    values (b.id, v_customer, v_quote, v_job, 'issued', now(), '1001', current_date + 30,
             50000, 1800, 9000, 59000)
     returning id into v_invoice;
     insert into public.invoice_item (business_id, invoice_id, service_id, description, quantity, unit,
@@ -132,6 +133,10 @@ begin
 
     insert into public.notification (business_id, customer_id, channel, template, to_address)
     values (b.id, v_customer, 'sms', 'quote_sent', b.customer_phone);
+    insert into public.device (business_id, user_id, expo_push_token, platform)
+    values (b.id, b.owner_id, 'ExponentPushToken[seed-' || b.id || ']', 'ios');
+    insert into public.notification_preference (business_id, user_id, event, push_enabled)
+    values (b.id, b.owner_id, 'quote_viewed', false);
     insert into public.subscription (business_id, plan_code, status, trial_ends_at)
     values (b.id, 'trial', 'trialing', now() + interval '14 days');
     insert into public.file (business_id, kind, bucket, storage_path, mime_type, size_bytes, job_id)

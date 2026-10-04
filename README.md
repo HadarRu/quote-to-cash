@@ -184,6 +184,10 @@ Create, send, revise and cancel quotes in `apps/mobile/app/(app)/quotes` (Home �
   validity date or `quote_valid_days`) and lets `send_quote()` assign the next number under a lock.
   It returns the customer link (`PUBLIC_APP_URL/quote/<token>`) and a `wa.me` link with a Hebrew
   message. Retrying with the same `sendKey` returns the same number (never a second one).
+- **Proposed visit times:** the preview lets the owner propose 2-3 visit times (day, start hour
+  and length, Israel time) or none. They go with the send (`slots: [{ startsAt, endsAt }]`) and
+  are stored by `send_quote()` as `quote_slot_option` rows (OFFERED; future, at most 12 hours,
+  not overlapping each other). The quote details show them, and the one the customer booked.
 - **Rules (database-enforced):** only drafts can be edited; status, number, token and snapshot
   change only through `send_quote` / `revise_quote` / `cancel_quote`. **Revise** copies a sent
   quote into a new draft revision; the old one becomes SUPERSEDED and its link is revoked.
@@ -214,13 +218,20 @@ and no app install.
 - **Data** comes only from the `public-quote` Edge Function (`verify_jwt = false`), called from the
   customer's browser so it sees their IP. It hashes the token with `TOKEN_PEPPER` and calls
   service-role-only database functions (`public_quote_open`, `public_quote_respond`,
-  `public_quote_comment`); the page never touches the database.
+  `public_quote_comment`, `public_quote_schedule`); the page never touches the database.
 - **States:** the first open marks the quote VIEWED; an open past the link's expiry marks it EXPIRED.
   Expired, cancelled, superseded (a newer revision was sent) and already-approved quotes get clear
   Hebrew pages. Unknown, malformed and revoked tokens get byte-identical `404` responses.
 - **Approve** requires typing a name; the name, IP and time are stored on the quote and in
   `audit_log`. Approving (or rejecting) twice returns the first answer. **Reject** takes an
   optional reason; **comments** go to `quote_comment` for the business.
+- **Scheduling:** an open quote lists the proposed times; once approved, the customer picks one
+  (`POST /public-quote/<token>/schedule` with `{ slotId }`). That books a CONFIRMED `appointment`
+  (the chosen time becomes SELECTED, the others DECLINED). Times that overlap another confirmed
+  visit of the business, or have passed, show as taken; if one is taken meanwhile, the
+  `appointment_no_overlapping_confirmed` exclusion constraint refuses it and the function answers
+  `409 { "error": "conflict" }`, so the page asks for another time. Picking the booked time again
+  returns it; a different time after booking is refused (`409 already_scheduled`).
 - **Rate limits** (per minute): 60 page loads and 10 answers per IP, 30 requests per link
   (`hit_rate_limit()`).
 - **Security:** every value is rendered as text (React escaping, no raw HTML); quote pages are
@@ -233,6 +244,73 @@ and no app install.
 
 Deploy with `pnpm exec supabase functions deploy public-quote` (it needs `TOKEN_PEPPER`). The web
 app reads `SUPABASE_URL` and `SUPABASE_ANON_KEY` from the root `.env`.
+
+## Notifications and the action queue
+
+**Home is the action queue** (`action_queue()`, runs under RLS): quotes sent and not answered
+("send reminder" opens WhatsApp with a prefilled text), approved quotes with no appointment
+("schedule"), completed jobs with no invoice ("create invoice"), unpaid invoices with the amount
+due ("payment reminder" on WhatsApp), and pushes that never reached you ("got it" dismisses them).
+A big "new quote" button sits on top; with nothing waiting it shows a friendly empty state. The
+lists reload whenever the screen is shown, on pull-to-refresh and when a push arrives.
+
+**Push.** After sign-in the app asks for permission and registers its Expo push token through
+the `devices` Edge Function (`POST /devices`; `DELETE /devices` on sign-out). Database triggers
+queue one push per recipient in `notification` for: quote viewed, approved and rejected;
+appointment created and changed (moved, confirmed, cancelled); a reminder the evening before
+(from 18:00 business time); invoice issued; payment received. Recipients are the business's
+OWNER/ADMIN members and, for appointments, the assigned member, minus anyone who turned the event
+off in Settings → Notifications. The `notify` Edge Function claims queued pushes, sends them
+through Expo and records the outcome: rate limits and lost requests are retried up to 3 times;
+anything else (including no registered device) is FAILED and stays in the recipient's action
+queue. Tokens Expo no longer knows are removed.
+
+**Analytics.** The same triggers record `quote_created`, `quote_sent`, `quote_viewed`,
+`quote_approved`, `quote_rejected`, `appointment_created`, `job_completed`, `invoice_created`,
+`invoice_sent` and `payment_received` in `app.analytics_event` (ids and amounts only, no names or
+phone numbers); `notify` forwards them to PostHog. The app sends `app_opened` itself. Without
+`POSTHOG_KEY` nothing is sent.
+
+**Wiring `notify`.** pg_net calls it right after a push is queued and pg_cron every minute. Both
+read two Vault secrets and do nothing until they exist:
+
+```sql
+select vault.create_secret('https://<project>.supabase.co/functions/v1/notify', 'notify_url');
+select vault.create_secret('<same value as NOTIFY_SECRET>', 'notify_secret');
+```
+
+Deploy with `pnpm exec supabase functions deploy notify devices` and set `NOTIFY_SECRET` (and
+`POSTHOG_KEY`, optionally `POSTHOG_HOST` and `EXPO_ACCESS_TOKEN`) with `supabase secrets set`.
+Push tokens need the app's EAS project id in `EXPO_PROJECT_ID`.
+
+## Invoices and payments
+
+Home → "חשבוניות ותשלומים" (`apps/mobile/app/(app)/invoices`). Invoicing sits behind an
+interface, so a real invoicing service can be added later without touching the rest.
+
+- **Provider interface:** `InvoiceProvider` (`createInvoice`, `getStatus`, `voidInvoice`) in
+  `packages/types/src/invoice.ts`. Each business selects its provider in
+  `business_settings.invoice_provider`; the `invoices` Edge Function picks it from
+  `InvoiceProviderRegistry` (`supabase/functions/invoices/providers`). The only provider today is
+  `manual`. A new provider implements the interface and is added to the registry,
+  `INVOICE_PROVIDER_IDS` and the two `provider` check constraints.
+- **Manual flow:** a COMPLETED job shows under "עבודות שהסתיימו"; "הכנת חשבונית" creates a NOT_ISSUED
+  invoice and its lines from the job's quote snapshot. The invoice page shows a data sheet to copy
+  or share into the owner's invoicing software; the owner then records the document number
+  (ISSUED), and marks it sent and paid (with the payment method; a `payment` row is recorded).
+  The "לא שולמו" list (ISSUED and SENT) has a WhatsApp payment reminder for each invoice.
+- **Statuses:** NOT_ISSUED → ISSUED / FAILED / VOIDED; FAILED → ISSUED / VOIDED; ISSUED → SENT /
+  PAID / VOIDED; SENT → PAID / VOIDED. PAID and VOIDED are final. Stored lowercase
+  (`not_issued`, …) like the other status enums.
+- **Rules (database-enforced):** only COMPLETED jobs can be invoiced, one live (not voided) invoice
+  per job, creation is idempotent per `idempotency_key`, a document number is used once per
+  business and never changes, the billed amounts never change, and invoices, lines and payments
+  are never deleted (void instead). Clients only read these tables; every change goes through the
+  `invoices` Edge Function and the service-role functions `create_invoice` / `transition_invoice`.
+- **Not implemented:** Israeli Tax Authority logic (allocation numbers and document types); see the
+  `TODO(tax-authority)` notes. Under the manual provider the owner's invoicing software handles it.
+
+Deploy with `pnpm exec supabase functions deploy invoices`.
 
 ## Quality checks
 
@@ -257,15 +335,19 @@ pnpm supabase:types && git diff --exit-code -- packages/types/src/database.types
 
 See `.env.example`. Secrets are never committed.
 
-| Variable                   | Used by                                         |
-| -------------------------- | ----------------------------------------------- |
-| `SUPABASE_URL`             | apps, Edge Functions                            |
-| `SUPABASE_ANON_KEY`        | apps                                            |
-| `TOKEN_PEPPER`             | Edge Functions only (server secret)             |
-| `SENTRY_DSN`               | error reporting                                 |
-| `POSTHOG_KEY`              | product analytics                               |
-| `PUBLIC_APP_URL`           | absolute links sent to customers (web base URL) |
-| `CHROMIUM_EXECUTABLE_PATH` | web PDF route: Chromium binary (optional)       |
+| Variable                   | Used by                                           |
+| -------------------------- | ------------------------------------------------- |
+| `SUPABASE_URL`             | apps, Edge Functions                              |
+| `SUPABASE_ANON_KEY`        | apps                                              |
+| `TOKEN_PEPPER`             | Edge Functions only (server secret)               |
+| `SENTRY_DSN`               | error reporting                                   |
+| `POSTHOG_KEY`              | product analytics (app and `notify`)              |
+| `POSTHOG_HOST`             | PostHog host (default `https://eu.i.posthog.com`) |
+| `EXPO_PROJECT_ID`          | app: EAS project for Expo push tokens             |
+| `EXPO_ACCESS_TOKEN`        | `notify`: Expo push security token (optional)     |
+| `NOTIFY_SECRET`            | `notify`: shared with Vault `notify_secret`       |
+| `PUBLIC_APP_URL`           | absolute links sent to customers (web base URL)   |
+| `CHROMIUM_EXECUTABLE_PATH` | web PDF route: Chromium binary (optional)         |
 
 ## Conventions
 

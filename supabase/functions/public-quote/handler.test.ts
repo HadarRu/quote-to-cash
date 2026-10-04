@@ -19,6 +19,9 @@ type Row = {
   approval: { name: string; at: string; ip: string | null } | null;
   rejection: { reason: string | null; at: string } | null;
   comments: string[];
+  /** Proposed times; `taken` ones overlap another confirmed visit. */
+  slots: { id: string; starts_at: string; ends_at: string; taken?: boolean }[];
+  bookedSlotId: string | null;
 };
 
 /** In-memory version of the public_quote_* SQL functions (same rules). */
@@ -50,6 +53,15 @@ function fakeDb() {
       expires_at: '2026-10-17T20:59:59Z',
       approval: row.approval && { name: row.approval.name, at: row.approval.at },
       rejection: row.rejection,
+      slots: row.slots.map(({ taken, ...slot }) => ({ ...slot, available: !taken })),
+      appointment:
+        row.slots
+          .filter((slot) => slot.id === row.bookedSlotId)
+          .map((slot) => ({
+            slot_id: slot.id,
+            starts_at: slot.starts_at,
+            ends_at: slot.ends_at,
+          }))[0] ?? null,
       ...(already === undefined ? {} : { already }),
     };
   };
@@ -88,6 +100,18 @@ function fakeDb() {
       row.comments.push(body);
       return { data: true, error: null };
     },
+    schedule: async (hash, slotId) => {
+      const row = find(hash);
+      if (!row) return { data: null, error: null };
+      if (state(row) !== 'approved') return { data: null, error: { code: '55000', message: 'x' } };
+      const slot = row.slots.find((s) => s.id === slotId);
+      if (!slot) return { data: null, error: { code: '22023', message: 'unknown time' } };
+      if (row.bookedSlotId === slotId) return { data: view(row, true), error: null };
+      if (row.bookedSlotId) return { data: null, error: { code: '23505', message: 'booked' } };
+      if (slot.taken) return { data: null, error: { code: '23P01', message: 'conflicting key' } };
+      row.bookedSlotId = slotId;
+      return { data: view(row, false), error: null };
+    },
     signUrls: async (logo, photos) => ({
       logoUrl: logo ? `https://storage.test/${logo}?sig` : null,
       photoUrls: photos.map((p) => `https://storage.test/${p}?sig`),
@@ -102,6 +126,8 @@ function fakeDb() {
       approval: null,
       rejection: null,
       comments: [],
+      slots: [],
+      bookedSlotId: null,
       ...over,
     });
     return token;
@@ -113,7 +139,11 @@ let ipCounter = 0;
 function call(
   deps: Deps,
   token: string,
-  init: { action?: 'approve' | 'reject' | 'comment'; body?: unknown; ip?: string } = {},
+  init: {
+    action?: 'approve' | 'reject' | 'comment' | 'schedule';
+    body?: unknown;
+    ip?: string;
+  } = {},
 ) {
   const path = `/public-quote/${token}${init.action ? `/${init.action}` : ''}`;
   return handlePublicQuote(
@@ -284,6 +314,71 @@ describe('public quote: answers', () => {
       deps,
     );
     expect(get.status).toBe(405);
+  });
+});
+
+describe('public quote: scheduling', () => {
+  const SLOT_A = '75000000-0000-4000-a000-000000000001';
+  const SLOT_B = '75000000-0000-4000-a000-000000000002';
+  const slots = () => [
+    { id: SLOT_A, starts_at: '2026-10-06T05:00:00+00:00', ends_at: '2026-10-06T07:00:00+00:00' },
+    {
+      id: SLOT_B,
+      starts_at: '2026-10-07T05:00:00+00:00',
+      ends_at: '2026-10-07T07:00:00+00:00',
+      taken: true,
+    },
+  ];
+  const schedule = (deps: Deps, token: string, slotId: unknown) =>
+    call(deps, token, { action: 'schedule', body: { slotId } });
+
+  it('lists the proposed times in the page data', async () => {
+    const { deps, add } = fakeDb();
+    expect(await (await call(deps, await add({ slots: slots() }))).json()).toMatchObject({
+      slots: [
+        { id: SLOT_A, startsAt: '2026-10-06T05:00:00+00:00', available: true },
+        { id: SLOT_B, available: false },
+      ],
+      appointment: null,
+    });
+  });
+
+  it('books a proposed time once the quote is approved, and a retry is harmless', async () => {
+    const { deps, add } = fakeDb();
+    const token = await add({ slots: slots() });
+    const early = await schedule(deps, token, SLOT_A);
+    expect([early.status, await early.json()]).toEqual([409, { error: 'quote_closed' }]);
+
+    await call(deps, token, { action: 'approve', body: { name: 'דנה לוי' } });
+    const res = await schedule(deps, token, SLOT_A);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      already: false,
+      appointment: { slotId: SLOT_A, startsAt: '2026-10-06T05:00:00+00:00' },
+    });
+    expect(await (await schedule(deps, token, SLOT_A)).json()).toMatchObject({ already: true });
+    const other = await schedule(deps, token, SLOT_B);
+    expect([other.status, await other.json()]).toEqual([409, { error: 'already_scheduled' }]);
+  });
+
+  it('answers CONFLICT when the time overlaps another confirmed visit', async () => {
+    const { deps, add } = fakeDb();
+    const token = await add({ slots: slots(), status: 'approved' });
+    const res = await schedule(deps, token, SLOT_B);
+    expect([res.status, await res.json()]).toEqual([409, { error: 'conflict' }]);
+  });
+
+  it('validates the slot id and finds nothing for unknown links', async () => {
+    const { deps, add } = fakeDb();
+    const token = await add({ slots: slots(), status: 'approved' });
+    const bad = await schedule(deps, token, 'x');
+    expect([bad.status, await bad.json()]).toEqual([422, { error: 'slot_required' }]);
+    const unknownSlot = await schedule(deps, token, '75000000-0000-4000-a000-000000000009');
+    expect([unknownSlot.status, await unknownSlot.json()]).toEqual([
+      422,
+      { error: 'validation_failed' },
+    ]);
+    expect((await schedule(deps, newToken(), SLOT_A)).status).toBe(404);
   });
 });
 

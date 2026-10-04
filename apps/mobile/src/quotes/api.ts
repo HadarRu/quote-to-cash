@@ -1,7 +1,7 @@
 import type { QuoteStatus, SendQuoteResponse } from '@q2c/types';
 import type { DiscountType } from '@q2c/utils';
-import { FunctionsHttpError } from '@supabase/supabase-js';
 import { isNetworkError } from '../lib/errors';
+import { invokeFunction } from '../lib/functions';
 import type { AppSupabaseClient } from '../lib/supabase';
 import type { LocalQuote } from './model';
 import type { ApiError, ApiResult, QuotesApi } from './outbox';
@@ -19,7 +19,8 @@ const QUOTE_COLUMNS = `id, business_id, customer_id, status, quote_number, title
   vat_rate_bp, vat_minor, total_minor, created_at, updated_at, sent_at, viewed_at, approved_at,
   rejected_at, cancelled_at, superseded_at, token_expires_at,
   customer (full_name, phone_e164),
-  quote_item (id, service_id, description, quantity, unit, unit_price_minor, vat_included, sort_order, deleted_at)`;
+  quote_item (id, service_id, description, quantity, unit, unit_price_minor, vat_included, sort_order, deleted_at),
+  quote_slot_option (id, starts_at, ends_at, status, sort_order, deleted_at)`;
 
 interface QuoteRow {
   id: string;
@@ -57,6 +58,14 @@ interface QuoteRow {
     unit: string;
     unit_price_minor: number;
     vat_included: boolean;
+    sort_order: number;
+    deleted_at: string | null;
+  }[];
+  quote_slot_option: {
+    id: string;
+    starts_at: string;
+    ends_at: string;
+    status: 'offered' | 'selected' | 'declined';
     sort_order: number;
     deleted_at: string | null;
   }[];
@@ -115,6 +124,10 @@ export function fromServerRow(row: QuoteRow): LocalQuote {
     cancelledAt: row.cancelled_at,
     supersededAt: row.superseded_at,
     tokenExpiresAt: row.token_expires_at,
+    slots: row.quote_slot_option
+      .filter((s) => !s.deleted_at)
+      .sort((a, b) => a.sort_order - b.sort_order || a.starts_at.localeCompare(b.starts_at))
+      .map((s) => ({ id: s.id, startsAt: s.starts_at, endsAt: s.ends_at, status: s.status })),
   };
 }
 
@@ -171,27 +184,10 @@ export function supabaseQuotesApi(supabase: AppSupabaseClient) {
       return error ? fail(apiError(error)) : ok(null);
     },
 
-    async send(quoteId, sendKey) {
-      try {
-        const { data, error } = await supabase.functions.invoke<SendQuoteResponse>(
-          `quotes/${quoteId}/send`,
-          { body: { sendKey } },
-        );
-        if (!error && data) return ok(data);
-        if (error instanceof FunctionsHttpError) {
-          const response = error.context as Response;
-          const body = (await response.json().catch(() => ({}))) as { error?: string };
-          return fail({
-            code: body.error,
-            message: body.error ?? error.message,
-            retryable: response.status >= 500 || response.status === 429,
-          });
-        }
-        // Relay and fetch errors: the request may not have arrived.
-        return fail({ message: error?.message ?? 'network', retryable: true });
-      } catch (e) {
-        return fail({ message: e instanceof Error ? e.message : 'network', retryable: true });
-      }
+    send(quoteId, sendKey, slots) {
+      return invokeFunction<SendQuoteResponse>(supabase, `quotes/${quoteId}/send`, {
+        body: slots?.length ? { sendKey, slots } : { sendKey },
+      });
     },
 
     async fetchQuote(quoteId) {

@@ -18,7 +18,7 @@
       "output": "single",
       "bundler": "metro"
     },
-    "plugins": ["expo-router", "expo-font", "expo-localization"],
+    "plugins": ["expo-router", "expo-font", "expo-localization", "expo-notifications"],
     "experiments": {
       "typedRoutes": true
     },

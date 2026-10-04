@@ -22,3 +22,14 @@ export function getConfig(): AppConfig {
   }
   return { supabaseUrl, supabaseAnonKey };
 }
+
+/** PostHog settings (optional; analytics are off without a key). */
+export function getAnalyticsConfig(): { apiKey: string; host: string } {
+  const extra = Constants.expoConfig?.extra ?? {};
+  const apiKey: unknown = extra.posthogKey;
+  const host: unknown = extra.posthogHost;
+  return {
+    apiKey: typeof apiKey === 'string' ? apiKey : '',
+    host: typeof host === 'string' ? host : '',
+  };
+}

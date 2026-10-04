@@ -7,6 +7,8 @@ export type Failure =
   | { kind: 'not_found' }
   | { kind: 'rate_limited' }
   | { kind: 'closed' }
+  /** The visit time was taken (or passed) before the customer got to it. */
+  | { kind: 'conflict' }
   | { kind: 'invalid'; error: string }
   | { kind: 'error' };
 
@@ -34,8 +36,11 @@ async function call<T>(token: string, action?: string, body?: unknown): Promise<
   }
   if (res.status === 404) return { kind: 'not_found' };
   if (res.status === 429) return { kind: 'rate_limited' };
-  if (res.status === 409) return { kind: 'closed' };
   const json = (await res.json().catch(() => null)) as unknown;
+  if (res.status === 409)
+    return (json as { error?: string } | null)?.error === 'conflict'
+      ? { kind: 'conflict' }
+      : { kind: 'closed' };
   if (res.status === 422)
     return { kind: 'invalid', error: (json as { error?: string } | null)?.error ?? 'generic' };
   if (!res.ok || json === null) return { kind: 'error' };
@@ -52,3 +57,6 @@ export const rejectQuote = (token: string, reason: string) =>
 
 export const sendComment = (token: string, body: string) =>
   call<{ ok: true }>(token, 'comment', { body });
+
+export const scheduleVisit = (token: string, slotId: string) =>
+  call<QuoteView>(token, 'schedule', { slotId });
