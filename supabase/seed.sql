@@ -120,8 +120,9 @@ begin
             v_tomorrow_9, v_tomorrow_9 + interval '2 hours');
 
     insert into public.invoice (business_id, customer_id, quote_id, job_id, status, issued_at,
-                                due_date, subtotal_minor, vat_rate_bp, vat_minor, total_minor)
-    values (b.id, v_customer, v_quote, v_job, 'issued', now(), current_date + 30,
+                                document_number, due_date, subtotal_minor, vat_rate_bp, vat_minor,
+                                total_minor)
+    values (b.id, v_customer, v_quote, v_job, 'issued', now(), '1001', current_date + 30,
             50000, 1800, 9000, 59000)
     returning id into v_invoice;
     insert into public.invoice_item (business_id, invoice_id, service_id, description, quantity, unit,

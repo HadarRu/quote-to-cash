@@ -6,5 +6,6 @@ export * from './customer.ts';
 export * from './price-list.ts';
 export * from './quote.ts';
 export * from './public-quote.ts';
+export * from './invoice.ts';
 // Generated from the database by `pnpm supabase:types`; do not edit by hand.
 export * from './database.types.ts';
