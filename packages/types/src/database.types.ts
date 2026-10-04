@@ -16,6 +16,7 @@ export type Database = {
           job_id: string | null;
           notes: string | null;
           quote_id: string | null;
+          slot_option_id: string | null;
           starts_at: string;
           status: Database['public']['Enums']['appointment_status'];
           updated_at: string;
@@ -32,6 +33,7 @@ export type Database = {
           job_id?: string | null;
           notes?: string | null;
           quote_id?: string | null;
+          slot_option_id?: string | null;
           starts_at: string;
           status?: Database['public']['Enums']['appointment_status'];
           updated_at?: string;
@@ -48,6 +50,7 @@ export type Database = {
           job_id?: string | null;
           notes?: string | null;
           quote_id?: string | null;
+          slot_option_id?: string | null;
           starts_at?: string;
           status?: Database['public']['Enums']['appointment_status'];
           updated_at?: string;
@@ -93,6 +96,13 @@ export type Database = {
             columns: ['business_id', 'quote_id'];
             isOneToOne: false;
             referencedRelation: 'quote';
+            referencedColumns: ['business_id', 'id'];
+          },
+          {
+            foreignKeyName: 'appointment_slot_option_fk';
+            columns: ['business_id', 'slot_option_id'];
+            isOneToOne: false;
+            referencedRelation: 'quote_slot_option';
             referencedColumns: ['business_id', 'id'];
           },
         ];
@@ -232,6 +242,7 @@ export type Database = {
           business_id: string;
           created_at: string;
           currency: string;
+          invoice_provider: string;
           next_invoice_number: number;
           next_quote_number: number;
           quote_valid_days: number;
@@ -243,6 +254,7 @@ export type Database = {
           business_id: string;
           created_at?: string;
           currency?: string;
+          invoice_provider?: string;
           next_invoice_number?: number;
           next_quote_number?: number;
           quote_valid_days?: number;
@@ -254,6 +266,7 @@ export type Database = {
           business_id?: string;
           created_at?: string;
           currency?: string;
+          invoice_provider?: string;
           next_invoice_number?: number;
           next_quote_number?: number;
           quote_valid_days?: number;
@@ -519,19 +532,30 @@ export type Database = {
           customer_id: string;
           deleted_at: string | null;
           discount_minor: number;
+          document_number: string | null;
           due_date: string | null;
+          failed_at: string | null;
+          failure_reason: string | null;
           id: string;
+          idempotency_key: string | null;
           invoice_number: number;
           issued_at: string | null;
           job_id: string | null;
           notes: string | null;
+          paid_at: string | null;
+          provider: string;
+          provider_document_id: string | null;
           quote_id: string | null;
+          sent_at: string | null;
+          snapshot: Json | null;
           status: Database['public']['Enums']['invoice_status'];
           subtotal_minor: number;
           total_minor: number;
           updated_at: string;
           vat_minor: number;
           vat_rate_bp: number;
+          void_reason: string | null;
+          voided_at: string | null;
         };
         Insert: {
           business_id: string;
@@ -539,19 +563,30 @@ export type Database = {
           customer_id: string;
           deleted_at?: string | null;
           discount_minor?: number;
+          document_number?: string | null;
           due_date?: string | null;
+          failed_at?: string | null;
+          failure_reason?: string | null;
           id?: string;
+          idempotency_key?: string | null;
           invoice_number?: number;
           issued_at?: string | null;
           job_id?: string | null;
           notes?: string | null;
+          paid_at?: string | null;
+          provider?: string;
+          provider_document_id?: string | null;
           quote_id?: string | null;
+          sent_at?: string | null;
+          snapshot?: Json | null;
           status?: Database['public']['Enums']['invoice_status'];
           subtotal_minor?: number;
           total_minor?: number;
           updated_at?: string;
           vat_minor?: number;
           vat_rate_bp?: number;
+          void_reason?: string | null;
+          voided_at?: string | null;
         };
         Update: {
           business_id?: string;
@@ -559,19 +594,30 @@ export type Database = {
           customer_id?: string;
           deleted_at?: string | null;
           discount_minor?: number;
+          document_number?: string | null;
           due_date?: string | null;
+          failed_at?: string | null;
+          failure_reason?: string | null;
           id?: string;
+          idempotency_key?: string | null;
           invoice_number?: number;
           issued_at?: string | null;
           job_id?: string | null;
           notes?: string | null;
+          paid_at?: string | null;
+          provider?: string;
+          provider_document_id?: string | null;
           quote_id?: string | null;
+          sent_at?: string | null;
+          snapshot?: Json | null;
           status?: Database['public']['Enums']['invoice_status'];
           subtotal_minor?: number;
           total_minor?: number;
           updated_at?: string;
           vat_minor?: number;
           vat_rate_bp?: number;
+          void_reason?: string | null;
+          voided_at?: string | null;
         };
         Relationships: [
           {
@@ -619,6 +665,7 @@ export type Database = {
           unit: string;
           unit_price_minor: number;
           updated_at: string;
+          vat_included: boolean;
         };
         Insert: {
           business_id: string;
@@ -634,6 +681,7 @@ export type Database = {
           unit?: string;
           unit_price_minor: number;
           updated_at?: string;
+          vat_included?: boolean;
         };
         Update: {
           business_id?: string;
@@ -649,6 +697,7 @@ export type Database = {
           unit?: string;
           unit_price_minor?: number;
           updated_at?: string;
+          vat_included?: boolean;
         };
         Relationships: [
           {
@@ -1225,6 +1274,7 @@ export type Database = {
           ends_at: string;
           id: string;
           quote_id: string;
+          sort_order: number;
           starts_at: string;
           status: Database['public']['Enums']['quote_slot_option_status'];
           updated_at: string;
@@ -1236,6 +1286,7 @@ export type Database = {
           ends_at: string;
           id?: string;
           quote_id: string;
+          sort_order?: number;
           starts_at: string;
           status?: Database['public']['Enums']['quote_slot_option_status'];
           updated_at?: string;
@@ -1247,6 +1298,7 @@ export type Database = {
           ends_at?: string;
           id?: string;
           quote_id?: string;
+          sort_order?: number;
           starts_at?: string;
           status?: Database['public']['Enums']['quote_slot_option_status'];
           updated_at?: string;
@@ -1511,6 +1563,13 @@ export type Database = {
       };
       complete_push_notifications: { Args: { p_results: Json }; Returns: undefined };
       create_business: { Args: { p_name: string }; Returns: string };
+      create_invoice: {
+        Args: { p_idempotency_key: string; p_job_id: string; p_user_id: string };
+        Returns: {
+          already_created: boolean;
+          invoice_id: string;
+        }[];
+      };
       dismiss_notification: { Args: { p_notification_id: string }; Returns: undefined };
       enqueue_appointment_reminders: { Args: { p_hour?: number; p_now?: string }; Returns: number };
       hit_rate_limit: {
@@ -1534,6 +1593,10 @@ export type Database = {
         };
         Returns: Json;
       };
+      public_quote_schedule: {
+        Args: { p_ip: unknown; p_slot_id: string; p_token_hash: string };
+        Returns: Json;
+      };
       register_device: {
         Args: {
           p_business_id: string;
@@ -1548,6 +1611,7 @@ export type Database = {
         Args: {
           p_quote_id: string;
           p_send_key: string;
+          p_slots?: Json;
           p_snapshot: Json;
           p_token_expires_at: string;
           p_token_hash: string;
@@ -1570,6 +1634,18 @@ export type Database = {
         };
         Returns: string;
       };
+      transition_invoice: {
+        Args: {
+          p_details?: Json;
+          p_invoice_id: string;
+          p_status: Database['public']['Enums']['invoice_status'];
+          p_user_id: string;
+        };
+        Returns: {
+          changed: boolean;
+          status: Database['public']['Enums']['invoice_status'];
+        }[];
+      };
       unregister_device: { Args: { p_token: string }; Returns: undefined };
     };
     Enums: {
@@ -1579,7 +1655,7 @@ export type Database = {
         'electrician' | 'plumber' | 'hvac' | 'handyman' | 'locksmith' | 'painter' | 'other';
       device_platform: 'ios' | 'android' | 'web';
       file_kind: 'logo' | 'quote_attachment' | 'job_photo' | 'invoice_pdf' | 'signature' | 'other';
-      invoice_status: 'draft' | 'issued' | 'partially_paid' | 'paid' | 'void';
+      invoice_status: 'not_issued' | 'issued' | 'sent' | 'paid' | 'failed' | 'voided';
       job_status: 'scheduled' | 'in_progress' | 'on_hold' | 'completed' | 'cancelled';
       member_role: 'OWNER' | 'ADMIN' | 'EMPLOYEE';
       member_status: 'invited' | 'active' | 'disabled';
@@ -1733,7 +1809,7 @@ export const Constants = {
       ],
       device_platform: ['ios', 'android', 'web'],
       file_kind: ['logo', 'quote_attachment', 'job_photo', 'invoice_pdf', 'signature', 'other'],
-      invoice_status: ['draft', 'issued', 'partially_paid', 'paid', 'void'],
+      invoice_status: ['not_issued', 'issued', 'sent', 'paid', 'failed', 'voided'],
       job_status: ['scheduled', 'in_progress', 'on_hold', 'completed', 'cancelled'],
       member_role: ['OWNER', 'ADMIN', 'EMPLOYEE'],
       member_status: ['invited', 'active', 'disabled'],

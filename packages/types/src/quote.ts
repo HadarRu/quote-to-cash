@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { TaxStatus } from './business.ts';
 import type { Database } from './database.types.ts';
 import { priceMinorSchema } from './price-list.ts';
+import { QuoteSlotsSchema } from './scheduling.ts';
 
 export type QuoteStatus = Database['public']['Enums']['quote_status'];
 
@@ -97,9 +98,13 @@ export const QuoteSendableSchema = QuoteDraftSchema.refine((quote) => quote.line
   message: 'quote_lines_required',
 });
 
-/** Body of POST /quotes/:id/send. The key makes retries return the same result. */
+/**
+ * Body of POST /quotes/:id/send. The key makes retries return the same result.
+ * `slots`: visit times offered to the customer (2-3; omit to offer none).
+ */
 export const SendQuoteRequestSchema = z.object({
   sendKey: z.uuid('send_key_invalid'),
+  slots: QuoteSlotsSchema.optional(),
 });
 export type SendQuoteRequest = z.infer<typeof SendQuoteRequestSchema>;
 

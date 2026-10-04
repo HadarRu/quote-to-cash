@@ -131,6 +131,12 @@ export default function Home() {
             onPress={() => router.push('/quotes')}
           />
           <Button
+            testID="home-invoices"
+            variant="secondary"
+            label={strings.appHome.invoices}
+            onPress={() => router.push('/invoices')}
+          />
+          <Button
             testID="home-customers"
             variant="secondary"
             label={strings.appHome.customers}
