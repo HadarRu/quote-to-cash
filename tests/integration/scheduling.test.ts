@@ -3,6 +3,9 @@
 // POST /public-quote/:token/schedule. PENDING: the scheduling stage (branch
 // claude/project-thread-2hpt5m, migration *_quote_scheduling.sql) is not on
 // main yet; this suite switches itself on once that migration is present.
+// Contract as given by that stage: send body `slots: [{ startsAt, endsAt }]`
+// (0 or 2-3), view `slots: [{ id, startsAt, endsAt, available }]` and
+// `appointment: { slotId, startsAt, endsAt } | null`.
 import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -45,8 +48,13 @@ async function approvedQuoteWithSlots(slots: { startsAt: string; endsAt: string 
   const view = await callFunction(`public-quote/${sent.token}`, {
     headers: { 'X-Forwarded-For': ip },
   });
-  const offered = (view.body!.slots ?? []) as { id: string; startsAt: string }[];
+  const offered = (view.body!.slots ?? []) as {
+    id: string;
+    startsAt: string;
+    available: boolean;
+  }[];
   expect(offered).toHaveLength(slots.length);
+  expect(offered.every((slot) => slot.available)).toBe(true);
   return { ...sent, ip, slots: offered };
 }
 
@@ -61,6 +69,7 @@ describe.skipIf(!schedulingShipped)('scheduling (pending on the scheduling stage
     const quote = await approvedQuoteWithSlots([slotTime(20, 6), slotTime(21, 6)]);
     const res = await schedule(quote.token, quote.slots[1]!.id, quote.ip);
     expect(res.status).toBe(200);
+    expect(res.body!.appointment).toMatchObject({ slotId: quote.slots[1]!.id });
 
     const { data } = await adminClient()
       .from('appointment')
@@ -71,7 +80,9 @@ describe.skipIf(!schedulingShipped)('scheduling (pending on the scheduling stage
     expect(new Date(data![0]!.starts_at).toISOString()).toBe(quote.slots[1]!.startsAt);
 
     // Booking the same slot again is harmless; a different one is refused.
-    expect((await schedule(quote.token, quote.slots[1]!.id, quote.ip)).status).toBe(200);
+    const again = await schedule(quote.token, quote.slots[1]!.id, quote.ip);
+    expect(again.status).toBe(200);
+    expect(again.body!.already).toBe(true);
     const other = await schedule(quote.token, quote.slots[0]!.id, quote.ip);
     expect(other.status).toBe(409);
     expect(other.body).toEqual({ error: 'already_scheduled' });
@@ -97,6 +108,14 @@ describe.skipIf(!schedulingShipped)('scheduling (pending on the scheduling stage
       .eq('status', 'confirmed')
       .eq('starts_at', time.startsAt);
     expect(data).toHaveLength(1);
+
+    // The loser's page now shows that time as taken.
+    const loser = results[0]!.status === 409 ? first! : second!;
+    const view = await callFunction(`public-quote/${loser.token}`, {
+      headers: { 'X-Forwarded-For': loser.ip },
+    });
+    const slots = view.body!.slots as { id: string; available: boolean }[];
+    expect(slots.find((slot) => slot.id === loser.slots[0]!.id)!.available).toBe(false);
   });
 
   it('rejects scheduling before approval, an unknown slot, and another quote’s slot', async () => {
@@ -109,11 +128,15 @@ describe.skipIf(!schedulingShipped)('scheduling (pending on the scheduling stage
       headers: { 'X-Forwarded-For': ip },
     });
     const slotId = ((view.body!.slots ?? []) as { id: string }[])[0]!.id;
-    expect((await schedule(unapproved.token, slotId, ip)).status).toBeGreaterThanOrEqual(400);
+    const early = await schedule(unapproved.token, slotId, ip);
+    expect([early.status, early.body]).toEqual([409, { error: 'quote_closed' }]);
 
     const approved = await approvedQuoteWithSlots([slotTime(32, 6), slotTime(33, 6)]);
-    expect((await schedule(approved.token, crypto.randomUUID(), ip)).status).toBe(404);
-    expect((await schedule(approved.token, slotId, ip)).status).toBe(404);
-    expect((await schedule(approved.token, 'not-a-uuid', ip)).status).toBe(422);
+    for (const foreign of [crypto.randomUUID(), slotId]) {
+      const res = await schedule(approved.token, foreign, ip);
+      expect([res.status, res.body]).toEqual([422, { error: 'validation_failed' }]);
+    }
+    const bad = await schedule(approved.token, 'not-a-uuid', ip);
+    expect([bad.status, bad.body]).toEqual([422, { error: 'slot_required' }]);
   });
 });
