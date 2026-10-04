@@ -55,6 +55,16 @@ export interface LocalQuote {
   cancelledAt: string | null;
   supersededAt: string | null;
   tokenExpiresAt: string | null;
+  /** Visit times proposed when sending (absent on quotes stored before scheduling). */
+  slots?: LocalSlot[];
+}
+
+/** A proposed visit time; `selected` is the one the customer booked. */
+export interface LocalSlot {
+  id: string;
+  startsAt: string;
+  endsAt: string;
+  status: 'offered' | 'selected' | 'declined';
 }
 
 /** Customer link returned when this device sent the quote. */

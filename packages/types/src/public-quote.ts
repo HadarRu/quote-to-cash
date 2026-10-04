@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { TaxStatus } from './business.ts';
+import type { PublicQuoteAppointment, PublicQuoteSlot } from './scheduling.ts';
 
 /**
  * What the customer sees, frozen when the quote is sent (quote.sent_snapshot,
@@ -62,6 +63,9 @@ export type PublicQuoteView =
       /** Short-lived signed URLs (the buckets are private). */
       logoUrl: string | null;
       photoUrls: string[];
+      /** Visit times the business proposed; one can be booked once approved. */
+      slots: PublicQuoteSlot[];
+      appointment: PublicQuoteAppointment | null;
     };
 
 /** Approving requires typing a name (the customer's signature). */

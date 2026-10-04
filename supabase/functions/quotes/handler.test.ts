@@ -282,6 +282,52 @@ describe('quotes send handler', () => {
     consoleError.mockRestore();
   });
 
+  it('passes the proposed visit times on, and sends none by default', async () => {
+    const { d, db } = deps();
+    await send(d);
+    expect(db.sendQuote.mock.calls[0]![0].p_slots).toEqual([]);
+
+    const withSlots = deps();
+    const slots = [
+      { startsAt: '2026-10-05T05:00:00Z', endsAt: '2026-10-05T07:00:00Z' },
+      { startsAt: '2026-10-06T10:00:00+03:00', endsAt: '2026-10-06T12:00:00+03:00' },
+    ];
+    expect((await send(withSlots.d, { sendKey: SEND_KEY, slots })).status).toBe(200);
+    expect(withSlots.db.sendQuote.mock.calls[0]![0].p_slots).toEqual([
+      { starts_at: '2026-10-05T05:00:00Z', ends_at: '2026-10-05T07:00:00Z' },
+      { starts_at: '2026-10-06T10:00:00+03:00', ends_at: '2026-10-06T12:00:00+03:00' },
+    ]);
+  });
+
+  it('refuses bad proposed times before touching the database', async () => {
+    const { d, db } = deps();
+    const later = { startsAt: '2026-10-05T05:00:00Z', endsAt: '2026-10-05T07:00:00Z' };
+    expect(await send(d, { sendKey: SEND_KEY, slots: [later] })).toEqual({
+      status: 422,
+      body: { error: 'slots_too_few' },
+    });
+    expect(await send(d, { sendKey: SEND_KEY, slots: [later, later] })).toEqual({
+      status: 422,
+      body: { error: 'slots_overlap' },
+    });
+    // NOW is 2026-10-03T09:00Z.
+    const past = { startsAt: '2026-10-03T08:00:00Z', endsAt: '2026-10-03T10:00:00Z' };
+    expect(await send(d, { sendKey: SEND_KEY, slots: [past, later] })).toEqual({
+      status: 422,
+      body: { error: 'slot_in_past' },
+    });
+    expect(db.sendQuote).not.toHaveBeenCalled();
+
+    const refused = deps({
+      sendQuote: async () => ({ data: null, error: { code: '22007', message: 'x' } }),
+    }).d;
+    const next = { startsAt: '2026-10-06T05:00:00Z', endsAt: '2026-10-06T07:00:00Z' };
+    expect(await send(refused, { sendKey: SEND_KEY, slots: [later, next] })).toEqual({
+      status: 422,
+      body: { error: 'slots_invalid' },
+    });
+  });
+
   it('validates the request', async () => {
     const { d } = deps();
     expect((await send(d, { sendKey: 'nope' })).status).toBe(422);

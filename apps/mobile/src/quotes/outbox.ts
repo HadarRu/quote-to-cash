@@ -1,4 +1,4 @@
-import type { SendQuoteResponse } from '@q2c/types';
+import type { QuoteSlot, SendQuoteResponse } from '@q2c/types';
 import type { LocalQuote, ServerDraftPayload } from './model';
 import type { LocalPhoto, OutboxOp, QuoteStore } from './store';
 
@@ -16,7 +16,11 @@ export interface QuotesApi {
   saveDraft(payload: ServerDraftPayload): Promise<ApiResult<null>>;
   uploadPhoto(photo: LocalPhoto): Promise<ApiResult<null>>;
   deletePhoto(photoId: string): Promise<ApiResult<null>>;
-  send(quoteId: string, sendKey: string): Promise<ApiResult<SendQuoteResponse>>;
+  send(
+    quoteId: string,
+    sendKey: string,
+    slots?: QuoteSlot[],
+  ): Promise<ApiResult<SendQuoteResponse>>;
   fetchQuote(quoteId: string): Promise<ApiResult<LocalQuote | null>>;
 }
 
@@ -103,8 +107,8 @@ async function run(store: QuoteStore, api: QuotesApi, op: OutboxOp): Promise<Api
       return null;
     }
     case 'send': {
-      const { sendKey } = op.payload as { sendKey: string };
-      const result = await api.send(op.quoteId, sendKey);
+      const { sendKey, slots } = op.payload as { sendKey: string; slots?: QuoteSlot[] };
+      const result = await api.send(op.quoteId, sendKey, slots);
       if (result.error) return result.error;
       const local = await store.getQuote(op.quoteId);
       if (local) {
