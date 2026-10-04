@@ -24,9 +24,9 @@ insert into tests.tenant_table (name, key_col, updatable, update_col) values
   ('quote_comment', 'business_id', true, null),
   ('appointment', 'business_id', true, null),
   ('job', 'business_id', true, null),
-  ('invoice', 'business_id', true, null),
-  ('invoice_item', 'business_id', true, null),
-  ('payment', 'business_id', true, null),
+  ('invoice', 'business_id', false, null),
+  ('invoice_item', 'business_id', false, null),
+  ('payment', 'business_id', false, null),
   ('notification', 'business_id', true, null),
   ('subscription', 'business_id', false, null),
   ('audit_log', 'business_id', false, null),
@@ -162,13 +162,14 @@ select is(
   format('%s: owner of A cannot insert into B', t.name)
 ) from tests.tenant_table t order by t.name;
 
--- A cannot UPDATE B rows: RLS hides them, so nothing is touched. audit_log
--- has no UPDATE privilege at all, so the statement itself is refused.
+-- A cannot UPDATE B rows: RLS hides them, so nothing is touched. audit_log,
+-- invoice, invoice_item and payment have no client UPDATE privilege at all,
+-- so the statement itself is refused.
 select is(
   tests.result_as(tests.id('owner_a'),
     format('with u as (update public.%1$I set %4$I = %4$I where %2$I = %3$L returning 1) select count(*) from u',
            t.name, t.key_col, tests.id('business_b'), coalesce(t.update_col, t.key_col))),
-  case when t.name = 'audit_log' then 'ERROR 42501' else '0' end,
+  case when t.name in ('audit_log', 'invoice', 'invoice_item', 'payment') then 'ERROR 42501' else '0' end,
   format('%s: owner of A cannot update B rows', t.name)
 ) from tests.tenant_table t order by t.name;
 

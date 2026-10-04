@@ -245,6 +245,35 @@ and no app install.
 Deploy with `pnpm exec supabase functions deploy public-quote` (it needs `TOKEN_PEPPER`). The web
 app reads `SUPABASE_URL` and `SUPABASE_ANON_KEY` from the root `.env`.
 
+## Invoices and payments
+
+Home → "חשבוניות ותשלומים" (`apps/mobile/app/(app)/invoices`). Invoicing sits behind an
+interface, so a real invoicing service can be added later without touching the rest.
+
+- **Provider interface:** `InvoiceProvider` (`createInvoice`, `getStatus`, `voidInvoice`) in
+  `packages/types/src/invoice.ts`. Each business selects its provider in
+  `business_settings.invoice_provider`; the `invoices` Edge Function picks it from
+  `InvoiceProviderRegistry` (`supabase/functions/invoices/providers`). The only provider today is
+  `manual`. A new provider implements the interface and is added to the registry,
+  `INVOICE_PROVIDER_IDS` and the two `provider` check constraints.
+- **Manual flow:** a COMPLETED job shows under "עבודות שהסתיימו"; "הכנת חשבונית" creates a NOT_ISSUED
+  invoice and its lines from the job's quote snapshot. The invoice page shows a data sheet to copy
+  or share into the owner's invoicing software; the owner then records the document number
+  (ISSUED), and marks it sent and paid (with the payment method; a `payment` row is recorded).
+  The "לא שולמו" list (ISSUED and SENT) has a WhatsApp payment reminder for each invoice.
+- **Statuses:** NOT_ISSUED → ISSUED / FAILED / VOIDED; FAILED → ISSUED / VOIDED; ISSUED → SENT /
+  PAID / VOIDED; SENT → PAID / VOIDED. PAID and VOIDED are final. Stored lowercase
+  (`not_issued`, …) like the other status enums.
+- **Rules (database-enforced):** only COMPLETED jobs can be invoiced, one live (not voided) invoice
+  per job, creation is idempotent per `idempotency_key`, a document number is used once per
+  business and never changes, the billed amounts never change, and invoices, lines and payments
+  are never deleted (void instead). Clients only read these tables; every change goes through the
+  `invoices` Edge Function and the service-role functions `create_invoice` / `transition_invoice`.
+- **Not implemented:** Israeli Tax Authority logic (allocation numbers and document types); see the
+  `TODO(tax-authority)` notes. Under the manual provider the owner's invoicing software handles it.
+
+Deploy with `pnpm exec supabase functions deploy invoices`.
+
 ## Quality checks
 
 The same commands run in CI (`.github/workflows/ci.yml`):

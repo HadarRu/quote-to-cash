@@ -1,7 +1,7 @@
 import type { QuoteStatus, SendQuoteResponse } from '@q2c/types';
 import type { DiscountType } from '@q2c/utils';
-import { FunctionsHttpError } from '@supabase/supabase-js';
 import { isNetworkError } from '../lib/errors';
+import { invokeFunction } from '../lib/functions';
 import type { AppSupabaseClient } from '../lib/supabase';
 import type { LocalQuote } from './model';
 import type { ApiError, ApiResult, QuotesApi } from './outbox';
@@ -184,27 +184,10 @@ export function supabaseQuotesApi(supabase: AppSupabaseClient) {
       return error ? fail(apiError(error)) : ok(null);
     },
 
-    async send(quoteId, sendKey, slots) {
-      try {
-        const { data, error } = await supabase.functions.invoke<SendQuoteResponse>(
-          `quotes/${quoteId}/send`,
-          { body: slots?.length ? { sendKey, slots } : { sendKey } },
-        );
-        if (!error && data) return ok(data);
-        if (error instanceof FunctionsHttpError) {
-          const response = error.context as Response;
-          const body = (await response.json().catch(() => ({}))) as { error?: string };
-          return fail({
-            code: body.error,
-            message: body.error ?? error.message,
-            retryable: response.status >= 500 || response.status === 429,
-          });
-        }
-        // Relay and fetch errors: the request may not have arrived.
-        return fail({ message: error?.message ?? 'network', retryable: true });
-      } catch (e) {
-        return fail({ message: e instanceof Error ? e.message : 'network', retryable: true });
-      }
+    send(quoteId, sendKey, slots) {
+      return invokeFunction<SendQuoteResponse>(supabase, `quotes/${quoteId}/send`, {
+        body: slots?.length ? { sendKey, slots } : { sendKey },
+      });
     },
 
     async fetchQuote(quoteId) {

@@ -15,7 +15,6 @@ Ideas noted while building, intentionally **not** implemented yet.
 - Finer role permissions (e.g. EMPLOYEE cannot edit the service catalog, prices or settings).
 - Storage bucket + Storage RLS policies matching `public.file` rows.
 - Automatic audit triggers on business tables writing to `audit_log`.
-- Lock issued invoices against edits (Israeli tax rules), with credit notes for corrections.
 - Team invites by phone number (`business_member.status = 'invited'` before the user exists).
 - Zod enum schemas derived from `Constants` in the generated database types.
 - Store the session in the device keychain (expo-secure-store with an encrypted AsyncStorage
@@ -50,3 +49,10 @@ Ideas noted while building, intentionally **not** implemented yet.
 - Scheduling: let the owner reschedule or cancel a booked visit from the app (release the SELECTED
   time so the customer can pick again), create the job when a visit is booked, notify the owner
   when the customer books, and show all visits on a calendar.
+- Invoicing providers that issue the legal document themselves (e.g. Green Invoice / Morning,
+  iCount, EZcount), including Tax Authority allocation numbers.
+- Partial payments and several payments per invoice (today "mark paid" records one payment for the
+  full total).
+- Credit notes for paid invoices (today a PAID invoice cannot be voided).
+- Due dates on invoices with automatic payment reminders (today the owner sends each reminder).
+- Store the invoice PDF from a provider in Storage (`file.kind = 'invoice_pdf'`).
