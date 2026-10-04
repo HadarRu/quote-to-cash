@@ -361,7 +361,9 @@ begin
 end;
 $$;
 
-create trigger invoice_events after insert or update of status on public.invoice
+-- Not `update of status`: a trigger listing the column would block the invoicing stage from
+-- changing the column's type.
+create trigger invoice_events after insert or update on public.invoice
   for each row execute function app.on_invoice_event();
 
 create function app.on_payment_event()

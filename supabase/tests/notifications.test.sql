@@ -178,7 +178,18 @@ select is(pg_temp.tracked('invoice_created', 'invoice_id', (select invoice from 
   'invoice_created is tracked');
 select is(pg_temp.queue_kinds((select job from ids)), '{}'::text[], 'an invoiced job leaves the queue');
 
-update public.invoice set status = 'issued', issued_at = now() where id = (select invoice from ids);
+-- With the invoicing stage, an issued invoice also carries the external document number.
+do $$
+begin
+  if exists (select 1 from information_schema.columns
+             where table_schema = 'public' and table_name = 'invoice' and column_name = 'document_number') then
+    execute 'update public.invoice set status = ''issued'', issued_at = now(), document_number = ''INV-1''
+             where id = (select invoice from ids)';
+  else
+    update public.invoice set status = 'issued', issued_at = now() where id = (select invoice from ids);
+  end if;
+end;
+$$;
 select is(pg_temp.recipients('invoice_issued', 'invoice_id', (select invoice from ids)),
   array[(select owner_a from ids)], 'invoice_issued: pushed to the owner');
 select is(pg_temp.queue_kinds((select invoice from ids)), '{invoice_unpaid}'::text[], 'an issued invoice waits for payment');
