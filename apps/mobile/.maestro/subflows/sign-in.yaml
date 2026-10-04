@@ -1,4 +1,6 @@
-# Fresh install, then sign in as owner A (seed.sql) with the local test OTP.
+# Fresh install, then sign in as the seeded user with phone env PHONE (seed.sql),
+# using the local test OTP. Each flow uses its own phone: Auth allows one code
+# request per phone per minute.
 appId: com.quotetocash.app
 ---
 - launchApp:
@@ -16,7 +18,7 @@ appId: com.quotetocash.app
     timeout: 60000
 - tapOn:
     id: sign-in-phone
-- inputText: '0500000001'
+- inputText: '${PHONE}'
 - tapOn:
     id: sign-in-send
 - tapOn:

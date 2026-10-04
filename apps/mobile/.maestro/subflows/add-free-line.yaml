@@ -10,10 +10,18 @@ appId: com.quotetocash.app
 - tapOn:
     id: quote-line-description
 - inputText: '${LINE}'
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      id: quote-line-quantity
 - tapOn:
     id: quote-line-quantity
 - eraseText
 - inputText: '2'
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      id: quote-line-price
 - tapOn:
     id: quote-line-price
 - inputText: '250'

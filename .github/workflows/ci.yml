@@ -226,4 +226,5 @@ jobs:
           path: |
             maestro-report.xml
             maestro-debug/
+            ~/.maestro/tests/
           if-no-files-found: ignore

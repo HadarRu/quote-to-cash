@@ -4,7 +4,10 @@
 appId: com.quotetocash.app
 name: Create customer and quote, send
 ---
-- runFlow: subflows/sign-in.yaml
+- runFlow:
+    file: subflows/sign-in.yaml
+    env:
+      PHONE: '0500000001' # owner A
 - tapOn:
     id: home-new-quote
 - extendedWaitUntil:

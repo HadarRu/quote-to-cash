@@ -3,7 +3,10 @@
 appId: com.quotetocash.app
 name: Offline quote syncs and sends after restart
 ---
-- runFlow: subflows/sign-in.yaml
+- runFlow:
+    file: subflows/sign-in.yaml
+    env:
+      PHONE: '0500000002' # employee A
 # Load the customer list once while online, so it is on the device.
 - tapOn:
     id: home-customers
