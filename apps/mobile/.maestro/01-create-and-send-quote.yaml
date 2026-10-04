@@ -33,9 +33,10 @@ name: Create customer and quote, send
     timeout: 15000
 - tapOn:
     id: customer-new-quote
+# The customer is already chosen, so its section opens collapsed with the name as summary.
 - extendedWaitUntil:
     visible:
-      id: quote-customer-name
+      id: quote-add-free-line
     timeout: 15000
 - assertVisible: 'Maestro Customer'
 - runFlow:
