@@ -1,6 +1,6 @@
 import { canQuote } from '@q2c/types';
 import { errorMessage, format, radius, space, strings } from '@q2c/ui';
-import { formatDateTimeIL } from '@q2c/utils';
+import { formatDateTimeIL, formatSlotIL } from '@q2c/utils';
 import { randomUUID } from 'expo-crypto';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
@@ -179,6 +179,8 @@ function Details({ quote }: { quote: QuoteListItem }) {
         </View>
       ) : null}
 
+      {quote.slots?.length ? <Visit quote={quote} /> : null}
+
       <QuoteDocument
         quote={quote}
         totals={displayTotals(quote, business.vatRateBp)}
@@ -232,6 +234,36 @@ function Details({ quote }: { quote: QuoteListItem }) {
         </>
       )}
     </Screen>
+  );
+}
+
+/** The proposed visit times, and the one the customer booked. */
+function Visit({ quote }: { quote: QuoteListItem }) {
+  const colors = useThemeColors();
+  const slots = quote.slots ?? [];
+  const booked = slots.find((slot) => slot.status === 'selected');
+  return (
+    <View
+      style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}
+      testID="quote-visit"
+    >
+      <AppText variant="heading">{strings.quotes.visitTitle}</AppText>
+      {booked ? (
+        <>
+          <AppText testID="quote-visit-booked">{strings.quotes.visitBooked}</AppText>
+          <AppText variant="heading">{formatSlotIL(booked.startsAt, booked.endsAt)}</AppText>
+        </>
+      ) : (
+        <>
+          <AppText variant="muted">
+            {quote.status === 'approved' ? strings.quotes.visitWaiting : strings.quotes.slotsTitle}
+          </AppText>
+          {slots.map((slot) => (
+            <AppText key={slot.id}>{formatSlotIL(slot.startsAt, slot.endsAt)}</AppText>
+          ))}
+        </>
+      )}
+    </View>
   );
 }
 

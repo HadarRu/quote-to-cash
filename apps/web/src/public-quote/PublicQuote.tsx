@@ -4,13 +4,17 @@ import {
   PublicQuoteApproveSchema,
   PublicQuoteCommentSchema,
   PublicQuoteRejectSchema,
+  PublicQuoteScheduleSchema,
+  type PublicQuoteSlot,
 } from '@q2c/types';
 import { errorMessage, format, strings } from '@q2c/ui';
+import { formatSlotIL } from '@q2c/utils';
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import {
   approveQuote,
   loadQuote,
   rejectQuote,
+  scheduleVisit,
   sendComment,
   type Failure,
   type QuoteView,
@@ -83,6 +87,13 @@ export function PublicQuote({ token, print }: { token: string; print: boolean })
     setNotice(message);
   };
 
+  /** Reloads the page data in place (no loading screen); false if that failed. */
+  const refresh = async () => {
+    const result = await loadQuote(token);
+    if (result.kind === 'ok') setState({ kind: 'ready', view: result.data });
+    return result.kind === 'ok';
+  };
+
   return (
     <main className="container quote-page" data-ready="true" data-state={view.state}>
       {notice ? (
@@ -103,12 +114,41 @@ export function PublicQuote({ token, print }: { token: string; print: boolean })
             <Answer
               token={token}
               businessName={view.quote.business.name}
+              hasSlots={view.slots.length > 0}
               onAnswered={update}
               onClosed={() => {
                 setNotice(t.closedNow);
                 retry();
               }}
             />
+          ) : null}
+          {view.appointment ? (
+            <section className="card" data-testid="quote-appointment">
+              <h2>{t.scheduledTitle}</h2>
+              <p>{formatSlotIL(view.appointment.startsAt, view.appointment.endsAt)}</p>
+            </section>
+          ) : view.state === 'approved' && view.slots.length > 0 ? (
+            <Schedule
+              token={token}
+              businessName={view.quote.business.name}
+              slots={view.slots}
+              onScheduled={update}
+              onRefresh={refresh}
+              onClosed={() => {
+                setNotice(t.scheduleAlready);
+                retry();
+              }}
+            />
+          ) : view.state === 'open' && view.slots.length > 0 ? (
+            <section className="card" data-testid="quote-slots">
+              <h2>{t.slotsTitle}</h2>
+              <ul className="slot-list">
+                {view.slots.map((slot) => (
+                  <li key={slot.id}>{formatSlotIL(slot.startsAt, slot.endsAt)}</li>
+                ))}
+              </ul>
+              <p className="muted">{t.slotsAfterApproval}</p>
+            </section>
           ) : null}
           <Comment token={token} />
           <a
@@ -164,11 +204,13 @@ function failureText(result: Failure): string {
 function Answer({
   token,
   businessName,
+  hasSlots,
   onAnswered,
   onClosed,
 }: {
   token: string;
   businessName: string;
+  hasSlots: boolean;
   onAnswered: (view: QuoteView, message: string) => void;
   onClosed: () => void;
 }) {
@@ -195,7 +237,11 @@ function Answer({
     if (result.kind === 'ok')
       return onAnswered(
         result.data,
-        mode === 'approve' ? format(t.approvedNow, { business: businessName }) : t.rejectedNow,
+        mode === 'reject'
+          ? t.rejectedNow
+          : hasSlots
+            ? t.approvedNowPick
+            : format(t.approvedNow, { business: businessName }),
       );
     if (result.kind === 'closed') return onClosed();
     setError(failureText(result));
@@ -261,6 +307,105 @@ function Answer({
       >
         {mode === 'approve' ? t.reject : t.back}
       </button>
+    </form>
+  );
+}
+
+/** After approval: pick one of the proposed visit times. */
+function Schedule({
+  token,
+  businessName,
+  slots,
+  onScheduled,
+  onRefresh,
+  onClosed,
+}: {
+  token: string;
+  businessName: string;
+  slots: PublicQuoteSlot[];
+  onScheduled: (view: QuoteView, message: string) => void;
+  onRefresh: () => Promise<boolean>;
+  onClosed: () => void;
+}) {
+  const [slotId, setSlotId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const free = slots.filter((slot) => slot.available);
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    setError(null);
+    // Same rules as the server (packages/types).
+    const parsed = PublicQuoteScheduleSchema.safeParse({ slotId });
+    if (!parsed.success)
+      return setError(errorMessage(parsed.error.issues[0]?.message ?? 'generic'));
+    setBusy(true);
+    const result = await scheduleVisit(token, parsed.data.slotId);
+    if (result.kind === 'conflict') {
+      // Someone else got that time: show what is still free.
+      await onRefresh();
+      setSlotId(null);
+      setBusy(false);
+      return setError(t.scheduleConflict);
+    }
+    setBusy(false);
+    if (result.kind === 'ok') {
+      const booked = 'appointment' in result.data ? result.data.appointment : null;
+      return onScheduled(
+        result.data,
+        format(t.scheduledNow, {
+          business: businessName,
+          when: booked ? formatSlotIL(booked.startsAt, booked.endsAt) : '',
+        }),
+      );
+    }
+    if (result.kind === 'closed') return onClosed();
+    setError(failureText(result));
+  };
+
+  return (
+    <form className="card" onSubmit={submit} noValidate data-testid="quote-schedule">
+      <h2>{t.scheduleTitle}</h2>
+      {free.length === 0 ? (
+        <p className="muted" data-testid="schedule-none-free">
+          {format(t.scheduleNoneFree, { business: businessName })}
+        </p>
+      ) : (
+        <>
+          <p className="muted">{format(t.scheduleBody, { business: businessName })}</p>
+          <fieldset className="slot-list" aria-invalid={error ? true : undefined}>
+            <legend className="sr-only">{t.scheduleTitle}</legend>
+            {slots.map((slot) => (
+              <label
+                key={slot.id}
+                className={`slot-option${slot.available ? '' : ' slot-option-taken'}`}
+              >
+                <input
+                  type="radio"
+                  name="slot"
+                  value={slot.id}
+                  checked={slotId === slot.id}
+                  disabled={!slot.available || busy}
+                  onChange={() => setSlotId(slot.id)}
+                  data-testid={`slot-${slot.id}`}
+                />
+                <span>{formatSlotIL(slot.startsAt, slot.endsAt)}</span>
+                {slot.available ? null : <span className="muted small">{t.slotTaken}</span>}
+              </label>
+            ))}
+          </fieldset>
+        </>
+      )}
+      {error ? (
+        <p className="error" role="alert" data-testid="schedule-error">
+          {error}
+        </p>
+      ) : null}
+      {free.length > 0 ? (
+        <button type="submit" className="button" disabled={busy} data-testid="schedule-submit">
+          {busy ? t.scheduling : t.scheduleSubmit}
+        </button>
+      ) : null}
     </form>
   );
 }

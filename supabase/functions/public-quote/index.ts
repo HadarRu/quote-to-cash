@@ -49,6 +49,14 @@ Deno.serve((req) =>
       });
       return { data: data as boolean | null, error };
     },
+    async schedule(tokenHash, slotId, ip) {
+      const { data, error } = await admin.rpc('public_quote_schedule', {
+        p_token_hash: tokenHash,
+        p_slot_id: slotId,
+        p_ip: ip,
+      });
+      return { data: data as DbView | null, error };
+    },
     async signUrls(logoPath, photoPaths) {
       const logo = logoPath
         ? await admin.storage.from('business-assets').createSignedUrl(logoPath, SIGNED_URL_SECONDS)

@@ -1,3 +1,4 @@
+import type { QuoteSlot } from '@q2c/types';
 import type { LocalQuote, QuoteLink, QuoteListItem, SyncState } from './model';
 
 type SqlValue = string | number | null;
@@ -183,14 +184,16 @@ export class QuoteStore {
   }
 
   /**
-   * Queues sending. A second tap keeps the first send key: if the first request
-   * already reached the server, the retry must be recognised as the same send.
+   * Queues sending, with the proposed visit times (if any). A second tap keeps
+   * the first send key and times: if the first request already reached the
+   * server, the retry must be recognised as the same send.
    */
-  async queueSend(quoteId: string, sendKey: string): Promise<void> {
+  async queueSend(quoteId: string, sendKey: string, slots: QuoteSlot[] = []): Promise<void> {
+    const payload = slots.length ? { sendKey, slots } : { sendKey };
     await this.db.runAsync(
       `insert into outbox (key, kind, quote_id, payload) values (?, 'send', ?, ?)
        on conflict (key) do update set failed = 0, next_attempt_at = 0`,
-      [`send:${quoteId}`, quoteId, JSON.stringify({ sendKey })],
+      [`send:${quoteId}`, quoteId, JSON.stringify(payload)],
     );
   }
 

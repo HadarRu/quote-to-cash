@@ -16,6 +16,7 @@ export type Database = {
           job_id: string | null;
           notes: string | null;
           quote_id: string | null;
+          slot_option_id: string | null;
           starts_at: string;
           status: Database['public']['Enums']['appointment_status'];
           updated_at: string;
@@ -32,6 +33,7 @@ export type Database = {
           job_id?: string | null;
           notes?: string | null;
           quote_id?: string | null;
+          slot_option_id?: string | null;
           starts_at: string;
           status?: Database['public']['Enums']['appointment_status'];
           updated_at?: string;
@@ -48,6 +50,7 @@ export type Database = {
           job_id?: string | null;
           notes?: string | null;
           quote_id?: string | null;
+          slot_option_id?: string | null;
           starts_at?: string;
           status?: Database['public']['Enums']['appointment_status'];
           updated_at?: string;
@@ -93,6 +96,13 @@ export type Database = {
             columns: ['business_id', 'quote_id'];
             isOneToOne: false;
             referencedRelation: 'quote';
+            referencedColumns: ['business_id', 'id'];
+          },
+          {
+            foreignKeyName: 'appointment_slot_option_fk';
+            columns: ['business_id', 'slot_option_id'];
+            isOneToOne: false;
+            referencedRelation: 'quote_slot_option';
             referencedColumns: ['business_id', 'id'];
           },
         ];
@@ -1134,6 +1144,7 @@ export type Database = {
           ends_at: string;
           id: string;
           quote_id: string;
+          sort_order: number;
           starts_at: string;
           status: Database['public']['Enums']['quote_slot_option_status'];
           updated_at: string;
@@ -1145,6 +1156,7 @@ export type Database = {
           ends_at: string;
           id?: string;
           quote_id: string;
+          sort_order?: number;
           starts_at: string;
           status?: Database['public']['Enums']['quote_slot_option_status'];
           updated_at?: string;
@@ -1156,6 +1168,7 @@ export type Database = {
           ends_at?: string;
           id?: string;
           quote_id?: string;
+          sort_order?: number;
           starts_at?: string;
           status?: Database['public']['Enums']['quote_slot_option_status'];
           updated_at?: string;
@@ -1400,12 +1413,17 @@ export type Database = {
         };
         Returns: Json;
       };
+      public_quote_schedule: {
+        Args: { p_ip: unknown; p_slot_id: string; p_token_hash: string };
+        Returns: Json;
+      };
       revise_quote: { Args: { p_new_quote_id: string; p_quote_id: string }; Returns: string };
       save_quote_draft: { Args: { p_quote: Json }; Returns: undefined };
       send_quote: {
         Args: {
           p_quote_id: string;
           p_send_key: string;
+          p_slots?: Json;
           p_snapshot: Json;
           p_token_expires_at: string;
           p_token_hash: string;

@@ -57,10 +57,10 @@ export function addDays(isoDate: string, days: number): string {
   return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
 }
 
-/** The last second of an Israeli calendar day ("YYYY-MM-DD") as a UTC moment (DST-aware). */
-export function endOfDayInJerusalem(isoDate: string): Date {
+/** A wall-clock time on an Israeli calendar day ("YYYY-MM-DD") as a UTC moment (DST-aware). */
+export function jerusalemTime(isoDate: string, hour: number, minute = 0, second = 0): Date {
   const [y, m, d] = isoDate.split('-').map(Number) as [number, number, number];
-  const wanted = Date.UTC(y, m - 1, d, 23, 59, 59);
+  const wanted = Date.UTC(y, m - 1, d, hour, minute, second);
   // The zone's offset at that wall-clock time, found by formatting a first guess.
   let guess = wanted;
   for (let i = 0; i < 2; i++) {
@@ -69,4 +69,36 @@ export function endOfDayInJerusalem(isoDate: string): Date {
     guess += wanted - shown;
   }
   return new Date(guess);
+}
+
+/** The last second of an Israeli calendar day ("YYYY-MM-DD") as a UTC moment (DST-aware). */
+export function endOfDayInJerusalem(isoDate: string): Date {
+  return jerusalemTime(isoDate, 23, 59, 59);
+}
+
+const timeFormatter = new Intl.DateTimeFormat('he-IL', {
+  timeZone: DISPLAY_TIME_ZONE,
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23',
+});
+
+const weekdayFormatter = new Intl.DateTimeFormat('he-IL', {
+  timeZone: DISPLAY_TIME_ZONE,
+  weekday: 'long',
+});
+
+/** Israel time of day, e.g. "08:30". */
+export function formatTimeIL(isoUtc: string): string {
+  return timeFormatter.format(new Date(isoUtc));
+}
+
+/** Hebrew weekday name in Israel, e.g. "יום שלישי". */
+export function formatWeekdayIL(isoUtc: string): string {
+  return weekdayFormatter.format(new Date(isoUtc));
+}
+
+/** A visit time in Israel, e.g. "יום שלישי 06.10.2026, 08:00–10:00". */
+export function formatSlotIL(startsAt: string, endsAt: string): string {
+  return `${formatWeekdayIL(startsAt)} ${formatDateIL(startsAt)}, ${formatTimeIL(startsAt)}–${formatTimeIL(endsAt)}`;
 }
