@@ -6,6 +6,11 @@ appId: com.quotetocash.app
 ---
 - launchApp:
     clearState: true
+# Wait for the first screen before deciding whether onboarding is showing.
+- extendedWaitUntil:
+    visible:
+      id: 'onboarding-skip|sign-in-phone'
+    timeout: 60000
 - runFlow:
     when:
       visible:

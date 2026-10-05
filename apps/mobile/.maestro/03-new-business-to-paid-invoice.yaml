@@ -75,6 +75,7 @@ name: New business, mark approved, job, invoice, paid
     timeout: 15000
 - tapOn:
     id: job-row
+# Status headings sit at the top of the screen, so each check scrolls back up to them.
 # "קבע מועד" with the default slot (tomorrow), then start and complete.
 - scrollUntilVisible:
     element:
@@ -86,11 +87,12 @@ name: New business, mark approved, job, invoice, paid
       id: job-schedule-save
 - tapOn:
     id: job-schedule-save
-- extendedWaitUntil:
-    visible:
+- scrollUntilVisible:
+    element:
       id: job-status
       text: 'נקבע מועד'
-    timeout: 15000
+    direction: UP
+    timeout: 30000
 - assertVisible:
     id: job-visit-time
 - scrollUntilVisible:
@@ -98,21 +100,23 @@ name: New business, mark approved, job, invoice, paid
       id: job-start
 - tapOn:
     id: job-start
-- extendedWaitUntil:
-    visible:
+- scrollUntilVisible:
+    element:
       id: job-status
       text: 'בביצוע'
-    timeout: 15000
+    direction: UP
+    timeout: 30000
 - scrollUntilVisible:
     element:
       id: job-complete
 - tapOn:
     id: job-complete
-- extendedWaitUntil:
-    visible:
+- scrollUntilVisible:
+    element:
       id: job-status
       text: 'הושלמה'
-    timeout: 15000
+    direction: UP
+    timeout: 30000
 # "הפק חשבונית": the invoice record, issued, then paid.
 - scrollUntilVisible:
     element:
@@ -136,10 +140,11 @@ name: New business, mark approved, job, invoice, paid
       id: invoice-issue
 - tapOn:
     id: invoice-issue
-- extendedWaitUntil:
-    visible:
+- scrollUntilVisible:
+    element:
       id: invoice-status
       text: 'הופקה'
+    direction: UP
     timeout: 30000
 - scrollUntilVisible:
     element:
@@ -151,8 +156,9 @@ name: New business, mark approved, job, invoice, paid
       id: invoice-mark-paid
 - tapOn:
     id: invoice-mark-paid
-- extendedWaitUntil:
-    visible:
+- scrollUntilVisible:
+    element:
       id: invoice-status
       text: 'שולמה'
+    direction: UP
     timeout: 30000
