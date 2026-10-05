@@ -50,6 +50,11 @@ pnpm dev:mobile               # Expo dev server; press i / a / w for iOS / Andro
 pnpm dev                      # both
 ```
 
+### Live demo
+
+A hosted demo (Supabase + Vercel, free plans) is deployed by hand with the **Demo deploy**
+workflow; setup, test numbers and limits are in [docs/demo.md](docs/demo.md).
+
 ### Local Supabase
 
 ```bash

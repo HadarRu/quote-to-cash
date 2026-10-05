@@ -1,0 +1,121 @@
+# Deploys a live demo: a hosted Supabase project (migrations, seed data, auth settings and
+# Edge Functions) plus two Vercel sites, the customer portal (Next.js) and the app as a website
+# (Expo web export). Runs only when started by hand (Actions → Demo deploy → Run workflow).
+# Setup and the secrets it needs: docs/demo.md.
+name: Demo deploy
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: demo-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+  SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+  SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+  VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+  PORTAL_PROJECT: quote-to-cash-portal
+  APP_PROJECT: quote-to-cash-app
+
+jobs:
+  deploy:
+    name: Deploy the demo
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Check secrets
+        run: |
+          missing=""
+          for name in SUPABASE_ACCESS_TOKEN SUPABASE_PROJECT_REF SUPABASE_DB_PASSWORD VERCEL_TOKEN; do
+            [ -n "${!name}" ] || missing="$missing $name"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repository secrets:$missing (see docs/demo.md)"
+            exit 1
+          fi
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Database (migrations and demo seed)
+        run: |
+          pnpm exec supabase link --project-ref "$SUPABASE_PROJECT_REF" --password "$SUPABASE_DB_PASSWORD"
+          # The seed runs once: the CLI records it and skips it on later runs.
+          pnpm exec supabase db push --linked --include-seed --password "$SUPABASE_DB_PASSWORD" --yes
+
+      - name: Auth settings (phone sign-in with the test numbers)
+        run: pnpm exec supabase config push --project-ref "$SUPABASE_PROJECT_REF" --yes
+
+      - name: Edge Functions
+        run: |
+          # The pepper must stay the same between runs, or links already sent stop working.
+          if ! pnpm exec supabase secrets list --project-ref "$SUPABASE_PROJECT_REF" -o json \
+              | jq -e '.[] | select(.name == "TOKEN_PEPPER")' > /dev/null; then
+            pnpm exec supabase secrets set --project-ref "$SUPABASE_PROJECT_REF" \
+              "TOKEN_PEPPER=$(openssl rand -hex 32)"
+          fi
+          pnpm exec supabase functions deploy --project-ref "$SUPABASE_PROJECT_REF" --use-api
+
+      - name: Public Supabase URL and key
+        run: |
+          keys=$(pnpm exec supabase projects api-keys --project-ref "$SUPABASE_PROJECT_REF" -o json)
+          anon=$(echo "$keys" | jq -r 'first(.[] | select(.name == "anon") | .api_key) // empty')
+          [ -n "$anon" ] || anon=$(echo "$keys" | jq -r 'first(.[] | select(.type == "publishable") | .api_key) // empty')
+          [ -n "$anon" ] || { echo "::error::No anon or publishable key found"; exit 1; }
+          echo "SUPABASE_URL=https://$SUPABASE_PROJECT_REF.supabase.co" >> "$GITHUB_ENV"
+          echo "SUPABASE_ANON_KEY=$anon" >> "$GITHUB_ENV"
+
+      - name: Vercel projects
+        run: |
+          api() { curl -sS -H "Authorization: Bearer $VERCEL_TOKEN" -H 'Content-Type: application/json' "$@"; }
+          ensure() { # name, JSON settings
+            api -X POST https://api.vercel.com/v11/projects -d "$(jq -nc --arg n "$1" --argjson s "$2" '$s + {name: $n}')" > /dev/null
+            api "https://api.vercel.com/v9/projects/$1"
+          }
+          portal=$(ensure "$PORTAL_PROJECT" '{"framework":"nextjs","rootDirectory":"apps/web","nodeVersion":"22.x","ssoProtection":null}')
+          app=$(ensure "$APP_PROJECT" '{"framework":null,"ssoProtection":null}')
+          for p in "$portal" "$app"; do
+            echo "$p" | jq -e '.id' > /dev/null || { echo "::error::Vercel: $(echo "$p" | jq -c '.error // .')"; exit 1; }
+          done
+          echo "VERCEL_ORG_ID=$(echo "$portal" | jq -r '.accountId')" >> "$GITHUB_ENV"
+          echo "PORTAL_ID=$(echo "$portal" | jq -r '.id')" >> "$GITHUB_ENV"
+          echo "APP_ID=$(echo "$app" | jq -r '.id')" >> "$GITHUB_ENV"
+
+      - name: Customer portal (Vercel)
+        run: |
+          VERCEL_PROJECT_ID="$PORTAL_ID" pnpm dlx vercel@latest deploy --prod --yes --token "$VERCEL_TOKEN" \
+            --build-env "SUPABASE_URL=$SUPABASE_URL" --build-env "SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY"
+          domain=$(curl -sS -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v9/projects/$PORTAL_ID/domains" | jq -r '.domains[0].name')
+          echo "PUBLIC_APP_URL=https://$domain" >> "$GITHUB_ENV"
+          # Customer links in sent quotes point here.
+          pnpm exec supabase secrets set --project-ref "$SUPABASE_PROJECT_REF" "PUBLIC_APP_URL=https://$domain"
+
+      - name: App as a website (Expo web export on Vercel)
+        run: |
+          pnpm --filter @q2c/mobile exec expo export --platform web --output-dir dist-web
+          # Single-page app: every path serves index.html.
+          echo '{"rewrites":[{"source":"/(.*)","destination":"/index.html"}]}' > apps/mobile/dist-web/vercel.json
+          VERCEL_PROJECT_ID="$APP_ID" pnpm dlx vercel@latest deploy apps/mobile/dist-web --prod --yes --token "$VERCEL_TOKEN"
+          domain=$(curl -sS -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v9/projects/$APP_ID/domains" | jq -r '.domains[0].name')
+          {
+            echo "## Demo links"
+            echo "- App: https://$domain"
+            echo "- Customer portal: $PUBLIC_APP_URL"
+            echo "- Sign in with 050-000-0001 and code 123456 (see docs/demo.md)"
+          } >> "$GITHUB_STEP_SUMMARY"
