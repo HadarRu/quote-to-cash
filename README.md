@@ -64,9 +64,11 @@ pnpm supabase:stop
 Create migrations with `pnpm exec supabase migration new <name>`, then run `supabase:reset`,
 `supabase:test` and `supabase:types` and commit the regenerated types (CI fails if they are stale).
 
-`supabase/seed.sql` creates two businesses (A and B), each with an OWNER and an EMPLOYEE, and one
-row in every table. It is for local development and tests only and refuses to run on a database
-that already has businesses. Never run it against production.
+`supabase/seed.sql` creates two businesses (A and B), each with an OWNER and an EMPLOYEE, their
+settings, customers and price list. It holds no quotes, jobs, visits or invoices: those come only
+from the app's own flows, so a missing flow cannot hide behind seed data (pgTAP fixtures build them
+through `supabase/tests/helpers/flow.psql`). It is for local development and tests only and refuses
+to run on a database that already has businesses. Never run it against production.
 
 ### Database model
 
@@ -80,6 +82,9 @@ that already has businesses. Never run it against production.
   which makes the caller its OWNER.
 - `quote_number` and `invoice_number` are assigned by the server per business and never change.
 - Confirmed appointments of one business cannot overlap (`appointment_no_overlapping_confirmed`).
+- A job is created only from an APPROVED quote, one per quote (`create_job_for_quote`, also run
+  inside the customer's approval and the owner's `mark_quote_approved`). Every new appointment
+  belongs to a job; jobs move only through `schedule_job` and `transition_job`.
 - `subscription` is read-only for members (written by the billing backend); `audit_log` is
   insert-only for everyone, including the table owner.
 

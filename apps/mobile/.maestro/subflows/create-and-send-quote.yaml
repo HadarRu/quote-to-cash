@@ -1,0 +1,63 @@
+# From Home: a new customer (env CUSTOMER), a quote with one line (env LINE,
+# 2 × ₪250 + VAT = ₪590), sent; ends on the quote's details, status "sent".
+appId: com.quotetocash.app
+---
+- tapOn:
+    id: home-new-quote
+- extendedWaitUntil:
+    visible:
+      id: quote-section-customer
+    timeout: 15000
+- tapOn: 'לקוח חדש'
+- tapOn:
+    id: customer-name
+- inputText: '${CUSTOMER}'
+- tapOn:
+    id: customer-phone
+- inputText: '0521234567'
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      id: customer-save
+- tapOn:
+    id: customer-save
+- extendedWaitUntil:
+    visible:
+      id: customer-new-quote
+    timeout: 15000
+- tapOn:
+    id: customer-new-quote
+# The customer is already chosen, so its section opens collapsed with the name as summary.
+- extendedWaitUntil:
+    visible:
+      id: quote-add-free-line
+    timeout: 15000
+- assertVisible: '${CUSTOMER}'
+- runFlow:
+    file: add-free-line.yaml
+    env:
+      LINE: '${LINE}'
+- assertVisible:
+    id: quote-floating-total
+    text: '.*590.*'
+- tapOn:
+    id: quote-preview
+- extendedWaitUntil:
+    visible:
+      id: quote-send
+    timeout: 15000
+- tapOn:
+    id: quote-send
+- extendedWaitUntil:
+    visible:
+      id: quote-sent
+    timeout: 30000
+- assertVisible:
+    id: quote-share-link
+- tapOn:
+    id: quote-to-details
+- extendedWaitUntil:
+    visible:
+      id: quote-status
+      text: '.*נשלחה.*'
+    timeout: 15000

@@ -261,3 +261,92 @@ export async function visitPlanner(businessId: string) {
     return { startsAt: start.toISOString(), endsAt: end.toISOString() };
   };
 }
+
+/** The customer approves through their link (POST /public-quote/:token/approve). */
+export async function approveOnLink(token: string, ip = freshIp()) {
+  return callFunction(`public-quote/${token}/approve`, {
+    body: { name: 'לקוח בדיקה' },
+    headers: { 'X-Forwarded-For': ip },
+  });
+}
+
+/** The live job of a quote, read as the member (RLS). */
+export async function jobOfQuote(as: SignedIn, quoteId: string) {
+  const { data, error } = await as.client
+    .from('job')
+    .select('id, status, started_at, completed_at')
+    .eq('quote_id', quoteId)
+    .is('deleted_at', null);
+  if (error) throw error;
+  return data;
+}
+
+/** POST to the `invoices` Edge Function as the member; throws unless it answers 200. */
+async function invoiceCall(as: SignedIn, path: string, body: Record<string, unknown>) {
+  const res = await callFunction(path, { accessToken: as.accessToken, body });
+  if (res.status !== 200) throw new Error(`${path}: ${res.status} ${JSON.stringify(res.body)}`);
+  return res.body!;
+}
+
+/**
+ * The whole flow for one business, through the same APIs the app and the
+ * customer's page use: a quote with a photo, sent with proposed times; the
+ * customer comments, approves and books a time; the job is started and
+ * completed; its invoice is created, issued and paid. Leaves a row in every
+ * business table (notifications and the audit log come from the database).
+ */
+export async function runFullFlow(as: SignedIn, businessId: string) {
+  const draft = await createDraft(as, businessId);
+  const photoPath = `${businessId}/quotes/${draft.quoteId}/${randomUUID()}.jpg`;
+  const upload = await as.client.storage
+    .from('quote-photos')
+    .upload(photoPath, new Uint8Array([0xff, 0xd8, 0xff, 0xd9]), { contentType: 'image/jpeg' });
+  if (upload.error) throw new Error(`photo upload: ${upload.error.message}`);
+  const file = await as.client.from('file').insert({
+    business_id: businessId,
+    kind: 'quote_attachment',
+    bucket: 'quote-photos',
+    storage_path: photoPath,
+    mime_type: 'image/jpeg',
+    size_bytes: 4,
+    quote_id: draft.quoteId,
+  });
+  if (file.error) throw new Error(`photo row: ${file.error.message}`);
+
+  const visit = await visitPlanner(businessId);
+  const sent = await sendQuote(as, draft, { slots: [visit(30), visit(31)] });
+  const ip = freshIp();
+  const comment = await callFunction(`public-quote/${sent.token}/comment`, {
+    body: { body: 'אפשר להגיע בבוקר?' },
+    headers: { 'X-Forwarded-For': ip },
+  });
+  if (comment.status !== 200) throw new Error(`comment: ${comment.status}`);
+  const approved = await approveOnLink(sent.token, ip);
+  if (approved.status !== 200) throw new Error(`approve: ${approved.status}`);
+  const slots = approved.body!.slots as { id: string }[];
+  const booked = await callFunction(`public-quote/${sent.token}/schedule`, {
+    body: { slotId: slots[0]!.id },
+    headers: { 'X-Forwarded-For': ip },
+  });
+  if (booked.status !== 200)
+    throw new Error(`schedule: ${booked.status} ${JSON.stringify(booked.body)}`);
+
+  const [job] = await jobOfQuote(as, sent.quoteId);
+  for (const action of ['start', 'complete'] as const) {
+    const { error } = await as.client.rpc('transition_job', {
+      p_job_id: job!.id,
+      p_action: action,
+    });
+    if (error) throw new Error(`${action}: ${error.message}`);
+  }
+  const created = await invoiceCall(as, 'invoices', {
+    jobId: job!.id,
+    idempotencyKey: randomUUID(),
+  });
+  const invoiceId = created.invoiceId as string;
+  await invoiceCall(as, `invoices/${invoiceId}/issue`, {
+    documentNumber: String(Date.now()).slice(-9),
+  });
+  await invoiceCall(as, `invoices/${invoiceId}/paid`, { method: 'bit' });
+  return { ...sent, jobId: job!.id, invoiceId };
+}

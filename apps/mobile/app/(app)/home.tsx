@@ -60,6 +60,8 @@ export default function Home() {
       );
     } else if (action.type === 'quote') {
       router.push({ pathname: '/quotes/[id]', params: { id: action.quoteId } });
+    } else if (action.type === 'job') {
+      router.push({ pathname: '/jobs/[id]', params: { id: action.jobId } });
     } else {
       setBusyId(row.id);
       const { error } = await dismissNotification(getSupabase(), action.notificationId);
@@ -129,6 +131,12 @@ export default function Home() {
             variant="secondary"
             label={strings.appHome.quotes}
             onPress={() => router.push('/quotes')}
+          />
+          <Button
+            testID="home-jobs"
+            variant="secondary"
+            label={strings.appHome.jobs}
+            onPress={() => router.push('/jobs')}
           />
           <Button
             testID="home-invoices"

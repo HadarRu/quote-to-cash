@@ -1,5 +1,6 @@
 # Maestro mobile E2E (Android). Runs in CI (.github/workflows/ci.yml, job mobile-e2e)
-# against a debug build and the local Supabase stack seeded by supabase/seed.sql.
+# against a debug build and the local Supabase stack (users, businesses and
+# customers from supabase/seed.sql; flow 03 starts from a phone with no user).
 # Locally: an emulator with the app installed, then `maestro test apps/mobile/.maestro`.
 flows:
   - '*.yaml'
@@ -8,3 +9,4 @@ executionOrder:
   flowsOrder:
     - 01-create-and-send-quote
     - 02-offline-quote-syncs
+    - 03-new-business-to-paid-invoice

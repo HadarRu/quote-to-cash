@@ -50,12 +50,13 @@ Ideas noted while building, intentionally **not** implemented yet.
   and mark DELIVERED; quiet hours; a reminder hour per business instead of 18:00.
 - Notifications: WhatsApp/SMS to customers (appointment reminder the day before), using the same
   queue with `channel = 'whatsapp'`.
-- Action queue: point "schedule" and "create invoice" straight at the scheduling and invoice screens
-  once they exist (today they open the quote).
 - Notification inbox screen listing every push, not only the failed ones.
 - Scheduling: let the owner reschedule or cancel a booked visit from the app (release the SELECTED
-  time so the customer can pick again), create the job when a visit is booked, notify the owner
-  when the customer books, and show all visits on a calendar.
+  time so the customer can pick again), notify the owner when the customer books, and a Calendar
+  screen showing all visits (creating a visit there goes through a job, as Job detail does today).
+- Jobs: assign a job to a team member from the app, put a job on hold and resume it, jobs without a
+  quote (walk-in work), and a bottom tab bar (Home / Quotes / Jobs / Invoices) instead of the Home
+  buttons.
 - Invoicing providers that issue the legal document themselves (e.g. Green Invoice / Morning,
   iCount, EZcount), including Tax Authority allocation numbers.
 - Partial payments and several payments per invoice (today "mark paid" records one payment for the

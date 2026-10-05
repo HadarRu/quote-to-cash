@@ -8,6 +8,8 @@ export interface ActionQueueRow {
   /** The quote, job, invoice or notification the row is about. */
   id: string;
   quote_id: string | null;
+  /** The job scheduling and invoicing rows open. */
+  job_id: string | null;
   customer_name: string | null;
   customer_phone: string | null;
   number: number | null;
@@ -35,12 +37,14 @@ export function groupQueue(rows: ActionQueueRow[]): ActionQueueSection[] {
 export type QueueAction =
   | { type: 'whatsapp'; url: string }
   | { type: 'quote'; quoteId: string }
+  | { type: 'job'; jobId: string }
   | { type: 'dismiss'; notificationId: string }
   | null;
 
 /**
- * The row's action. Scheduling and invoicing open the quote the work came
- * from (the scheduling and invoicing screens hang off it).
+ * The row's action. Scheduling and invoicing open the job (schedule it, or
+ * invoice it); an approved quote that has no job yet opens the quote, where
+ * the job is created.
  */
 export function queueAction(row: ActionQueueRow, businessName: string): QueueAction {
   switch (row.kind) {
@@ -73,6 +77,7 @@ export function queueAction(row: ActionQueueRow, businessName: string): QueueAct
       };
     case 'approved_unscheduled':
     case 'completed_uninvoiced':
+      if (row.job_id) return { type: 'job', jobId: row.job_id };
       return row.quote_id ? { type: 'quote', quoteId: row.quote_id } : null;
     case 'push_failed':
       return { type: 'dismiss', notificationId: row.id };

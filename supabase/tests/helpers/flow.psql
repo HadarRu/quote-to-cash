@@ -1,0 +1,153 @@
+-- Fixtures built through the app's own database functions, the way the app
+-- and the Edge Functions call them, so no test seeds what a flow should
+-- create (quotes, jobs, visits, invoices). Include it inside the test's
+-- transaction, after `create extension pgtap`:
+--
+--   \ir helpers/flow.psql
+--
+-- Users and businesses come from supabase/seed.sql.
+
+create schema flow;
+grant usage on schema flow to anon, authenticated, service_role;
+
+create function flow.business_a() returns uuid language sql immutable as $$ select '10000000-0000-4000-a000-000000000001'::uuid $$;
+create function flow.business_b() returns uuid language sql immutable as $$ select '10000000-0000-4000-b000-000000000001'::uuid $$;
+create function flow.owner_a() returns uuid language sql immutable as $$ select '00000000-0000-4000-a000-000000000001'::uuid $$;
+create function flow.employee_a() returns uuid language sql immutable as $$ select '00000000-0000-4000-a000-000000000002'::uuid $$;
+create function flow.owner_b() returns uuid language sql immutable as $$ select '00000000-0000-4000-b000-000000000001'::uuid $$;
+
+-- Acts as an authenticated member until `reset role`.
+create function flow.as_user(p_user uuid) returns void language plpgsql as $$
+begin
+  perform set_config('role', 'authenticated', true);
+  perform set_config('request.jwt.claims', json_build_object('sub', p_user, 'role', 'authenticated')::text, true);
+end;
+$$;
+
+-- The business's seeded customer.
+create function flow.customer_of(p_business uuid) returns uuid language sql stable as $$
+  select c.id from public.customer c where c.business_id = p_business order by c.created_at limit 1
+$$;
+
+-- A draft with one line (2 × ₪250 + 18% VAT = ₪590), saved by the member as
+-- the app does; the line comes from p_service when given.
+create function flow.draft(p_user uuid, p_business uuid, p_title text default 'התקנת שקעים',
+                           p_customer uuid default null, p_service uuid default null)
+returns uuid language plpgsql as $$
+declare
+  v_id uuid := gen_random_uuid();
+  v_customer uuid := coalesce(p_customer, flow.customer_of(p_business));
+begin
+  perform flow.as_user(p_user);
+  perform public.save_quote_draft(jsonb_build_object(
+    'id', v_id, 'business_id', p_business, 'customer_id', v_customer, 'title', p_title,
+    'discount_type', 'none', 'discount_value', 0, 'vat_rate_bp', 1800,
+    'subtotal_minor', 50000, 'discount_minor', 0, 'vat_minor', 9000, 'total_minor', 59000,
+    'items', jsonb_build_array(jsonb_build_object(
+      'id', gen_random_uuid(), 'service_id', p_service, 'description', 'התקנת שקע', 'quantity', 2, 'unit', 'point',
+      'unit_price_minor', 25000, 'line_total_minor', 50000, 'vat_included', false, 'sort_order', 0))));
+  reset role;
+  return v_id;
+end;
+$$;
+
+-- Sends a draft as the `quotes` Edge Function does (totals and the customer's
+-- snapshot from the stored rows). Returns the link's token hash.
+create function flow.send(p_user uuid, p_quote uuid, p_slots jsonb default '[]')
+returns text language plpgsql as $$
+declare
+  v_quote public.quote%rowtype;
+  v_hash text := encode(extensions.digest(p_quote::text, 'sha256'), 'hex');
+  v_totals jsonb;
+begin
+  select * into v_quote from public.quote q where q.id = p_quote;
+  v_totals := jsonb_build_object('subtotal_minor', v_quote.subtotal_minor, 'discount_minor', v_quote.discount_minor,
+                                 'vat_rate_bp', v_quote.vat_rate_bp, 'vat_minor', v_quote.vat_minor,
+                                 'total_minor', v_quote.total_minor);
+  perform public.send_quote(p_user, p_quote, gen_random_uuid(), v_hash, now() + interval '14 days', v_totals,
+    jsonb_build_object(
+      'revision', v_quote.revision, 'title', v_quote.title, 'notes', v_quote.notes,
+      'valid_until', current_date + 14,
+      'business', (select jsonb_build_object('name', b.name, 'tax_status', b.tax_status, 'tax_id', b.tax_id,
+                                             'phone', b.phone_e164, 'email', b.email, 'logo_path', null)
+                   from public.business b where b.id = v_quote.business_id),
+      'customer', (select jsonb_build_object('full_name', c.full_name, 'phone', c.phone_e164, 'address', null)
+                   from public.customer c where c.id = v_quote.customer_id),
+      'items', (select jsonb_agg(jsonb_build_object(
+                         'description', i.description, 'quantity', i.quantity::text, 'unit', i.unit,
+                         'unit_price_minor', i.unit_price_minor, 'vat_included', i.vat_included,
+                         'line_total_minor', i.line_total_minor) order by i.sort_order)
+                from public.quote_item i where i.quote_id = p_quote and i.deleted_at is null),
+      'discount_type', v_quote.discount_type, 'discount_value', v_quote.discount_value,
+      'totals', v_totals, 'photos', '[]'::jsonb),
+    p_slots);
+  return v_hash;
+end;
+$$;
+
+-- The customer approves through their link (the `public-quote` Edge Function).
+create function flow.approve(p_token_hash text, p_name text default 'משה ישראלי')
+returns jsonb language sql as $$
+  select public.public_quote_respond(p_token_hash, 'approve', p_name, null, '10.0.0.1'::inet)
+$$;
+
+create function flow.job_of(p_quote uuid) returns uuid language sql as $$
+  select j.id from public.job j where j.quote_id = p_quote and j.deleted_at is null
+$$;
+
+-- A quote the customer approved on their page; its job waits for a visit.
+create function flow.approved_quote(p_user uuid, p_business uuid, p_title text default 'התקנת שקעים')
+returns uuid language plpgsql as $$
+declare
+  v_quote uuid := flow.draft(p_user, p_business, p_title);
+begin
+  perform flow.approve(flow.send(p_user, v_quote));
+  return v_quote;
+end;
+$$;
+
+-- The member sets the job's visit (Job detail -> "קבע מועד").
+create function flow.schedule(p_user uuid, p_job uuid, p_starts timestamptz, p_ends timestamptz)
+returns uuid language plpgsql as $$
+declare
+  v_id uuid;
+begin
+  perform flow.as_user(p_user);
+  v_id := public.schedule_job(p_job, p_starts, p_ends);
+  reset role;
+  return v_id;
+end;
+$$;
+
+-- Start / complete / cancel, as the member.
+create function flow.move_job(p_user uuid, p_job uuid, p_action text)
+returns public.job_status language plpgsql as $$
+declare
+  v_status public.job_status;
+begin
+  perform flow.as_user(p_user);
+  v_status := public.transition_job(p_job, p_action);
+  reset role;
+  return v_status;
+end;
+$$;
+
+-- An approved quote whose job was started and completed. Returns the job.
+create function flow.completed_job(p_user uuid, p_business uuid, p_title text default 'התקנת שקעים')
+returns uuid language plpgsql as $$
+declare
+  v_job uuid := flow.job_of(flow.approved_quote(p_user, p_business, p_title));
+begin
+  perform flow.move_job(p_user, v_job, 'start');
+  perform flow.move_job(p_user, v_job, 'complete');
+  return v_job;
+end;
+$$;
+
+-- "הפק חשבונית" (the `invoices` Edge Function). Returns the invoice.
+create function flow.invoice(p_user uuid, p_job uuid, p_key uuid default gen_random_uuid())
+returns uuid language sql as $$
+  select invoice_id from public.create_invoice(p_user, p_job, p_key)
+$$;
+
+grant execute on all functions in schema flow to anon, authenticated, service_role;

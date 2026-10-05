@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { groupQueue, queueAction, rowTitle, type ActionQueueRow } from './model.ts';
 
 const QUOTE = '80000000-0000-4000-a000-000000000001';
+const JOB = '81000000-0000-4000-a000-000000000001';
 
 function row(
   kind: ActionQueueRow['kind'],
@@ -11,6 +12,7 @@ function row(
     kind,
     id: `${kind}-1`,
     quote_id: QUOTE,
+    job_id: JOB,
     customer_name: 'משה ישראלי',
     customer_phone: '+972521111111',
     number: 12,
@@ -65,16 +67,19 @@ describe('queueAction', () => {
     expect(text).toContain('1,000.00');
   });
 
-  it('scheduling and invoicing open the quote', () => {
-    expect(queueAction(row('approved_unscheduled'), 'b')).toEqual({
+  it('scheduling and invoicing open the job', () => {
+    expect(queueAction(row('approved_unscheduled'), 'b')).toEqual({ type: 'job', jobId: JOB });
+    expect(queueAction(row('completed_uninvoiced'), 'b')).toEqual({ type: 'job', jobId: JOB });
+  });
+
+  it('an approved quote without a job opens the quote, to create the job', () => {
+    expect(queueAction(row('approved_unscheduled', { job_id: null }), 'b')).toEqual({
       type: 'quote',
       quoteId: QUOTE,
     });
-    expect(queueAction(row('completed_uninvoiced'), 'b')).toEqual({
-      type: 'quote',
-      quoteId: QUOTE,
-    });
-    expect(queueAction(row('completed_uninvoiced', { quote_id: null }), 'b')).toBeNull();
+    expect(
+      queueAction(row('approved_unscheduled', { job_id: null, quote_id: null }), 'b'),
+    ).toBeNull();
   });
 
   it('a failed push is dismissed', () => {

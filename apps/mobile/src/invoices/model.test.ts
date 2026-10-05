@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fromInvoiceRow, splitJobs } from './api';
+import { fromInvoiceRow, jobsToInvoice } from './api';
 import {
   filterInvoices,
   invoiceDataSheet,
@@ -149,14 +149,14 @@ describe('lists', () => {
     expect(invoiceLabel({ documentNumber: null })).toBe('חשבונית (טרם הופקה)');
   });
 
-  it('offers open jobs to complete, and completed jobs with no live invoice to invoice', () => {
+  it('offers completed jobs with no live invoice to invoice', () => {
     const job = {
       title: 'עבודה',
       completed_at: null,
       customer: { full_name: 'דנה' },
       quote: { total_minor: 100 },
     };
-    const { open, toInvoice } = splitJobs([
+    const toInvoice = jobsToInvoice([
       { ...job, id: 'scheduled', status: 'scheduled', invoice: [] },
       { ...job, id: 'none', status: 'completed', invoice: [] },
       {
@@ -172,7 +172,6 @@ describe('lists', () => {
         invoice: [{ status: 'not_issued', deleted_at: null }],
       },
     ]);
-    expect(open.map((j) => j.id)).toEqual(['scheduled']);
     expect(toInvoice.map((j) => j.id)).toEqual(['none', 'voided']);
     expect(toInvoice[0]).toEqual({
       id: 'none',

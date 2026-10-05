@@ -2,7 +2,12 @@
 -- leaving quote snapshots untouched. Relies on supabase/seed.sql.
 begin;
 create extension if not exists pgtap with schema extensions;
+\ir helpers/flow.psql
 select plan(12);
+
+-- A sent quote of business A with a line from the seeded service.
+select flow.send(flow.owner_a(), flow.draft(flow.owner_a(), flow.business_a(), p_service =>
+  (select id from public.service where business_id = flow.business_a() and name = 'התקנת שקע')));
 
 -- A small list in the same shape as packages/types/src/starter-price-lists/*.json.
 create temp table starter as select '{
@@ -80,7 +85,7 @@ select qi.id, qi.description, qi.unit, qi.quantity, qi.unit_price_minor, qi.line
 from public.quote_item qi join public.quote q on q.id = qi.quote_id
 where qi.business_id = '10000000-0000-4000-a000-000000000001' and qi.service_id is not null;
 
-select is((select count(*) from before_delete), 1::bigint, 'precondition: the seed quote has one line from a service');
+select is((select count(*) from before_delete), 1::bigint, 'precondition: the quote has one line from a service');
 
 update public.service set deleted_at = now()
 where business_id = '10000000-0000-4000-a000-000000000001' and name = 'התקנת שקע';

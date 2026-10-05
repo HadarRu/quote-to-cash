@@ -76,21 +76,14 @@ const toSummary = (j: JobRow): JobSummary => ({
   totalMinor: j.quote?.total_minor ?? null,
 });
 
-/**
- * Open jobs (to mark completed), and completed jobs whose invoices, if any,
- * are all voided (to invoice).
- */
-export function splitJobs(rows: JobRow[]): { open: JobSummary[]; toInvoice: JobSummary[] } {
-  return {
-    open: rows.filter((j) => j.status !== 'completed').map(toSummary),
-    toInvoice: rows
-      .filter(
-        (j) =>
-          j.status === 'completed' &&
-          !j.invoice.some((i) => i.status !== 'voided' && !i.deleted_at),
-      )
-      .map(toSummary),
-  };
+/** Completed jobs whose invoices, if any, are all voided: ready to invoice. */
+export function jobsToInvoice(rows: JobRow[]): JobSummary[] {
+  return rows
+    .filter(
+      (j) =>
+        j.status === 'completed' && !j.invoice.some((i) => i.status !== 'voided' && !i.deleted_at),
+    )
+    .map(toSummary);
 }
 
 const fail = <T>(error: { message: string; code?: string }): ApiResult<T> => ({
@@ -120,22 +113,12 @@ export function supabaseInvoicesApi(supabase: AppSupabaseClient) {
           'id, status, title, completed_at, customer (full_name), quote (total_minor), invoice (status, deleted_at)',
         )
         .eq('business_id', businessId)
-        .in('status', ['scheduled', 'in_progress', 'on_hold', 'completed'])
+        .eq('status', 'completed')
         .is('deleted_at', null)
         .order('updated_at', { ascending: false })
         .limit(200);
-      if (error) return fail<ReturnType<typeof splitJobs>>(error);
-      return { data: splitJobs(data as unknown as JobRow[]), error: null };
-    },
-
-    /** Marks a job done (members update jobs directly under RLS). */
-    async completeJob(jobId: string): Promise<ApiResult<null>> {
-      const { error } = await supabase
-        .from('job')
-        .update({ status: 'completed', completed_at: new Date().toISOString() })
-        .eq('id', jobId)
-        .neq('status', 'completed');
-      return error ? fail(error) : { data: null, error: null };
+      if (error) return fail<JobSummary[]>(error);
+      return { data: jobsToInvoice(data as unknown as JobRow[]), error: null };
     },
 
     async fetchInvoice(invoiceId: string): Promise<ApiResult<InvoiceListItem | null>> {

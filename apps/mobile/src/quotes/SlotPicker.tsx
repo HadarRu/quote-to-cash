@@ -25,6 +25,50 @@ export const slotLabel = (choice: SlotChoice) => {
   return formatSlotIL(slot.startsAt, slot.endsAt);
 };
 
+/** A first choice to adjust: tomorrow, 08:00, two hours. */
+export const defaultSlotChoice = (days: { value: string }[]): SlotChoice => ({
+  day: days[1]!.value,
+  hour: 8,
+  hours: 2,
+});
+
+/** One visit time: day, start hour and length, picked with chips. */
+export function SlotChoiceFields({
+  days,
+  value,
+  onChange,
+}: {
+  days: { value: string; label: string }[];
+  value: SlotChoice;
+  onChange: (next: SlotChoice) => void;
+}) {
+  return (
+    <>
+      <ChoiceChips
+        label={t.slotDay}
+        options={days}
+        value={value.day}
+        onChange={(day) => onChange({ ...value, day })}
+        testID="slot-day"
+      />
+      <ChoiceChips
+        label={t.slotStart}
+        options={hourOptions}
+        value={String(value.hour)}
+        onChange={(hour) => onChange({ ...value, hour: Number(hour) })}
+        testID="slot-hour"
+      />
+      <ChoiceChips
+        label={t.slotDuration}
+        options={durationOptions}
+        value={String(value.hours)}
+        onChange={(hours) => onChange({ ...value, hours: Number(hours) })}
+        testID="slot-duration"
+      />
+    </>
+  );
+}
+
 /** Up to 3 proposed visit times: day, start hour and length, picked with chips. */
 export function SlotPicker({
   value,
@@ -39,7 +83,7 @@ export function SlotPicker({
   const days = useMemo(() => slotDayOptions(new Date()), []);
   const [draft, setDraft] = useState<SlotChoice | null>(null);
 
-  const startNew = () => setDraft({ day: days[1]!.value, hour: 8, hours: 2 });
+  const startNew = () => setDraft(defaultSlotChoice(days));
 
   return (
     <View
@@ -65,27 +109,7 @@ export function SlotPicker({
 
       {draft ? (
         <>
-          <ChoiceChips
-            label={t.slotDay}
-            options={days}
-            value={draft.day}
-            onChange={(day) => setDraft({ ...draft, day })}
-            testID="slot-day"
-          />
-          <ChoiceChips
-            label={t.slotStart}
-            options={hourOptions}
-            value={String(draft.hour)}
-            onChange={(hour) => setDraft({ ...draft, hour: Number(hour) })}
-            testID="slot-hour"
-          />
-          <ChoiceChips
-            label={t.slotDuration}
-            options={durationOptions}
-            value={String(draft.hours)}
-            onChange={(hours) => setDraft({ ...draft, hours: Number(hours) })}
-            testID="slot-duration"
-          />
+          <SlotChoiceFields days={days} value={draft} onChange={setDraft} />
           <Button
             testID="slot-add-confirm"
             variant="secondary"

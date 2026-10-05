@@ -13,7 +13,7 @@ create temp table ids as select
   '74000000-0000-4000-a000-000000000001'::uuid as q1,
   '74000000-0000-4000-a000-000000000002'::uuid as q2,
   '74000000-0000-4000-a000-000000000003'::uuid as q3,
-  -- Far from the seed's appointments (Asia/Jerusalem wall-clock times).
+  -- Fixed times far ahead (Asia/Jerusalem wall-clock times).
   '2031-03-03 08:00 Asia/Jerusalem'::timestamptz as t08,
   '2031-03-03 10:00 Asia/Jerusalem'::timestamptz as t10,
   '2031-03-03 12:00 Asia/Jerusalem'::timestamptz as t12,

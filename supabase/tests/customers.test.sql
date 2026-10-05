@@ -2,7 +2,11 @@
 -- duplicate phones, soft delete, and quotes staying readable. Relies on supabase/seed.sql.
 begin;
 create extension if not exists pgtap with schema extensions;
+\ir helpers/flow.psql
 select plan(9);
+
+-- The seed customer of business A gets a sent quote.
+select flow.send(flow.owner_a(), flow.draft(flow.owner_a(), flow.business_a()));
 
 -- Act as the EMPLOYEE of business A: customers are everyday work for every member.
 set local role authenticated;
@@ -30,7 +34,6 @@ select throws_ok(
   'phones must be E.164 (same rule as PhoneSchema)'
 );
 
--- The seed customer of business A has an approved quote.
 select is(
   (select count(*) from public.quote q
      join public.customer c on c.business_id = q.business_id and c.id = q.customer_id

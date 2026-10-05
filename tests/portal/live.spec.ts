@@ -1,7 +1,7 @@
 // Critical path 1 across the real stack: the business creates a customer and a
 // quote and sends it with visit times (the same API calls the app makes), the
 // customer opens the link in a browser, approves, picks a date, and the business
-// sees the approval and a confirmed appointment.
+// sees the approval, the job it created, and a confirmed appointment for that job.
 import { strings } from '@q2c/ui';
 import { expect, test } from '@playwright/test';
 import {
@@ -58,6 +58,11 @@ test('create customer and quote, send, customer opens, approves and picks a date
     .select('body')
     .eq('quote_id', sent.quoteId);
   expect(comments).toEqual([{ body: 'מתי אפשר להתחיל?' }]);
+  const { data: jobs } = await owner.client
+    .from('job')
+    .select('id, status')
+    .eq('quote_id', sent.quoteId);
+  expect(jobs).toEqual([{ id: expect.any(String), status: 'pending_schedule' }]);
 
   // The customer picks the second visit time.
   const { data: slots } = await owner.client
@@ -70,13 +75,17 @@ test('create customer and quote, send, customer opens, approves and picks a date
   await page.getByTestId('schedule-submit').click();
   await expect(page.getByTestId('quote-appointment')).toBeVisible();
 
-  // The business sees a confirmed appointment at that time.
+  // The business sees a confirmed appointment at that time, for the job.
   const { data: appointments } = await owner.client
     .from('appointment')
-    .select('status, starts_at')
+    .select('status, starts_at, job_id, job (status)')
     .eq('quote_id', sent.quoteId);
   expect(appointments).toHaveLength(1);
-  expect(appointments![0]!.status).toBe('confirmed');
+  expect(appointments![0]).toMatchObject({
+    status: 'confirmed',
+    job_id: jobs![0]!.id,
+    job: { status: 'scheduled' },
+  });
   expect(Date.parse(appointments![0]!.starts_at)).toBe(Date.parse(slots![1]!.starts_at));
 
   // Reloading shows the approved, booked quote with no way to answer again.

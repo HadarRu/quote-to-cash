@@ -1,9 +1,12 @@
 -- Notifications: device registration, preferences, push events from quotes,
 -- appointments, jobs, invoices and payments, reminders, delivery bookkeeping,
--- analytics events and the action queue as items progress. Relies on supabase/seed.sql
--- (business A: OWNER with a device and quote_viewed pushes turned off, and an EMPLOYEE).
+-- analytics events and the action queue as items progress, driven through the
+-- app's own flows (send, the customer's answer, scheduling, start/complete,
+-- invoicing). Relies on supabase/seed.sql (business A: OWNER with a device and
+-- quote_viewed pushes turned off, and an EMPLOYEE).
 begin;
 create extension if not exists pgtap with schema extensions;
+\ir helpers/flow.psql
 select plan(48);
 
 create temp table ids as select
@@ -14,10 +17,12 @@ create temp table ids as select
   (select id from public.business_member
    where business_id = '10000000-0000-4000-a000-000000000001' and role = 'EMPLOYEE') as employee_member,
   (select id from public.customer where business_id = '10000000-0000-4000-a000-000000000001') as customer_a,
-  '80000000-0000-4000-a000-000000000001'::uuid as q1,
-  '80000000-0000-4000-a000-000000000002'::uuid as appt,
-  '80000000-0000-4000-a000-000000000003'::uuid as job,
-  '80000000-0000-4000-a000-000000000004'::uuid as invoice;
+  -- Filled in as the flow creates them.
+  null::uuid as q1,
+  null::text as token,
+  null::uuid as appt,
+  null::uuid as job,
+  null::uuid as invoice;
 grant select on ids to authenticated, service_role;
 
 -- Run as an authenticated member (restored by `reset role`).
@@ -94,26 +99,23 @@ select throws_ok($$ insert into public.notification_preference (business_id, use
 reset role;
 
 -- ---------------------------------------------------------------- quote events and queue
-insert into public.quote (id, business_id, customer_id, title)
-select q1, biz, customer_a, 'תאורה בגינה' from ids;
+update ids set q1 = flow.draft(owner_a, biz, 'תאורה בגינה');
 select is(pg_temp.tracked('quote_created', 'quote_id', (select q1 from ids)), 1::bigint, 'quote_created is tracked');
 select is(pg_temp.queue_kinds((select q1 from ids)), '{}'::text[], 'a draft is not in the queue');
 
-update public.quote set status = 'sent', quote_number = app.take_quote_number(business_id), sent_at = now(),
-  token_expires_at = now() + interval '14 days'
-where id = (select q1 from ids);
+update ids set token = flow.send(owner_a, q1);
 select is(pg_temp.tracked('quote_sent', 'quote_id', (select q1 from ids)), 1::bigint, 'quote_sent is tracked');
 select is(pg_temp.queue_kinds((select q1 from ids)), '{quote_unanswered}'::text[],
   'a sent quote waits for an answer');
 
-update public.quote set status = 'viewed', viewed_at = now() where id = (select q1 from ids);
+select public.public_quote_open((select token from ids), null);
 select is(pg_temp.recipients('quote_viewed', 'quote_id', (select q1 from ids)), '{}'::uuid[],
   'quote_viewed: no push for an owner who turned it off');
 select is(pg_temp.tracked('quote_viewed', 'quote_id', (select q1 from ids)), 1::bigint, 'quote_viewed is tracked');
 select is(pg_temp.queue_kinds((select q1 from ids)), '{quote_unanswered}'::text[], 'a viewed quote still waits');
 
-update public.quote set status = 'approved', approved_at = now(), approved_name = 'משה ישראלי'
-where id = (select q1 from ids);
+select flow.approve((select token from ids));
+update ids set job = flow.job_of(q1);
 select is(pg_temp.recipients('quote_approved', 'quote_id', (select q1 from ids)),
   array[(select owner_a from ids)], 'quote_approved: pushed to the owner, not the employee');
 select is((select payload ->> 'customer_name' from public.notification
@@ -122,17 +124,17 @@ select is((select payload ->> 'customer_name' from public.notification
 select is(pg_temp.queue_kinds((select q1 from ids)), '{approved_unscheduled}'::text[],
   'an approved quote waits to be scheduled');
 
-update public.quote set status = 'viewed' where id = (select q1 from ids);
-update public.quote set status = 'approved' where id = (select q1 from ids);
+select flow.approve((select token from ids));
 select is(cardinality(pg_temp.recipients('quote_approved', 'quote_id', (select q1 from ids))), 1,
   'an approval is pushed once');
 
 -- ---------------------------------------------------------------- appointments
-insert into public.appointment (id, business_id, customer_id, quote_id, assigned_member_id, status, starts_at, ends_at)
-select appt, biz, customer_a, q1, employee_member, 'proposed',
+-- The job is assigned to the employee (no assignment screen yet), then the
+-- owner sets the visit for tomorrow afternoon.
+update public.job set assigned_member_id = (select employee_member from ids) where id = (select job from ids);
+update ids set appt = flow.schedule(owner_a, job,
   (date_trunc('day', now() at time zone 'Asia/Jerusalem') + interval '1 day 13 hours') at time zone 'Asia/Jerusalem',
-  (date_trunc('day', now() at time zone 'Asia/Jerusalem') + interval '1 day 15 hours') at time zone 'Asia/Jerusalem'
-from ids;
+  (date_trunc('day', now() at time zone 'Asia/Jerusalem') + interval '1 day 15 hours') at time zone 'Asia/Jerusalem');
 select is(pg_temp.recipients('appointment_created', 'appointment_id', (select appt from ids)),
   array[(select owner_a from ids), (select employee_a from ids)],
   'appointment_created: pushed to the owner and the assigned member');
@@ -166,46 +168,33 @@ select is(
 reset role;
 
 -- ---------------------------------------------------------------- jobs and invoices
-insert into public.job (id, business_id, customer_id, quote_id, title, status, started_at, completed_at)
-select job, biz, customer_a, q1, 'תאורה בגינה', 'completed', now() - interval '2 hours', now() from ids;
+select flow.move_job(owner_a, job, 'start') from ids;
+select flow.move_job(owner_a, job, 'complete') from ids;
 select is(pg_temp.tracked('job_completed', 'job_id', (select job from ids)), 1::bigint, 'job_completed is tracked');
 select is(pg_temp.queue_kinds((select job from ids)), '{completed_uninvoiced}'::text[],
   'a completed job waits for an invoice');
 
-insert into public.invoice (id, business_id, customer_id, quote_id, job_id, subtotal_minor, vat_rate_bp, vat_minor, total_minor)
-select invoice, biz, customer_a, q1, job, 100000, 1800, 18000, 118000 from ids;
+update ids set invoice = flow.invoice(owner_a, job);
 select is(pg_temp.tracked('invoice_created', 'invoice_id', (select invoice from ids)), 1::bigint,
   'invoice_created is tracked');
 select is(pg_temp.queue_kinds((select job from ids)), '{}'::text[], 'an invoiced job leaves the queue');
 
--- With the invoicing stage, an issued invoice also carries the external document number.
-do $$
-begin
-  if exists (select 1 from information_schema.columns
-             where table_schema = 'public' and table_name = 'invoice' and column_name = 'document_number') then
-    execute 'update public.invoice set status = ''issued'', issued_at = now(), document_number = ''INV-1''
-             where id = (select invoice from ids)';
-  else
-    update public.invoice set status = 'issued', issued_at = now() where id = (select invoice from ids);
-  end if;
-end;
-$$;
+select public.transition_invoice(owner_a, invoice, 'issued', '{"document_number": "INV-1"}') from ids;
 select is(pg_temp.recipients('invoice_issued', 'invoice_id', (select invoice from ids)),
   array[(select owner_a from ids)], 'invoice_issued: pushed to the owner');
 select is(pg_temp.queue_kinds((select invoice from ids)), '{invoice_unpaid}'::text[], 'an issued invoice waits for payment');
 
-insert into public.payment (business_id, invoice_id, amount_minor, method, status, paid_at)
-select biz, invoice, 18000, 'bit', 'succeeded', now() from ids;
+select pg_temp.as_user((select owner_a from ids));
+select is(
+  (select amount_minor from public.action_queue((select biz from ids)) where id = (select invoice from ids)),
+  59000::bigint, 'an unpaid invoice shows the full amount due');
+reset role;
+select public.transition_invoice(owner_a, invoice, 'paid', '{"method": "bit"}') from ids;
 select is(
   (select array[count(*), max(amount_minor)] from public.notification n
    cross join lateral (select (n.payload ->> 'amount_minor')::bigint as amount_minor) a
    where n.event = 'payment_received' and n.payload ->> 'invoice_id' = (select invoice from ids)::text),
-  array[1::bigint, 18000::bigint], 'payment_received: pushed with the amount');
-select is(
-  (select amount_minor from public.action_queue((select biz from ids)) where id = (select invoice from ids)),
-  100000::bigint, 'a partly paid invoice shows the amount still due');
-insert into public.payment (business_id, invoice_id, amount_minor, method, status, paid_at)
-select biz, invoice, 100000, 'cash', 'succeeded', now() from ids;
+  array[1::bigint, 59000::bigint], 'payment_received: pushed with the amount');
 select is(pg_temp.queue_kinds((select invoice from ids)), '{}'::text[], 'a paid invoice leaves the queue');
 
 -- ---------------------------------------------------------------- delivery

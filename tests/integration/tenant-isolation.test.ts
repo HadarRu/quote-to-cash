@@ -10,6 +10,7 @@ import {
   anonClient,
   businesses,
   createDraft,
+  runFullFlow,
   signIn,
   storageStatus,
   users,
@@ -56,7 +57,11 @@ beforeAll(async () => {
     signIn(users.ownerA.phone),
     signIn(users.employeeA.phone),
   ]);
-});
+  // The seed has users, businesses and customers only: both businesses get
+  // the rest by running the real flow.
+  const ownerB = await signIn(users.ownerB.phone);
+  await Promise.all([runFullFlow(ownerA, businesses.a), runFullFlow(ownerB, businesses.b)]);
+}, 60_000);
 
 async function rowsOfB(table: Table, key: string) {
   const { data, error } = await from(adminClient(), table).select('*').eq(key, businesses.b);
@@ -65,7 +70,7 @@ async function rowsOfB(table: Table, key: string) {
 }
 
 describe.each(TABLES)('%s', (table, key) => {
-  it('seed has business B rows (so the checks below mean something)', async () => {
+  it('business B has rows (so the checks below mean something)', async () => {
     expect((await rowsOfB(table, key)).length).toBeGreaterThan(0);
   });
 

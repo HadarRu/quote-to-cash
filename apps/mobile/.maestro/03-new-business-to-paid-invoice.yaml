@@ -1,0 +1,164 @@
+# Acceptance for the Jobs stage: a brand-new owner (a phone with no user and no
+# seeded data) reaches a paid invoice using only the app. The customer approves
+# by phone, so the owner marks the quote approved; the portal path is covered in
+# tests/portal/live.spec.ts and tests/integration/jobs.test.ts.
+appId: com.quotetocash.app
+name: New business, mark approved, job, invoice, paid
+---
+- runFlow:
+    file: subflows/sign-in.yaml
+    env:
+      PHONE: '0501234567' # no seeded user
+# Business setup (skipped when an earlier run on this database already did it).
+- runFlow:
+    when:
+      visible:
+        id: setup-name
+    commands:
+      - tapOn:
+          id: setup-name
+      - inputText: 'Maestro Electric'
+      - hideKeyboard
+      - tapOn:
+          id: setup-trade-electrician
+      - scrollUntilVisible:
+          element:
+            id: setup-tax-status-osek_murshe
+      - tapOn:
+          id: setup-tax-status-osek_murshe
+      - tapOn:
+          id: setup-submit
+- extendedWaitUntil:
+    visible:
+      id: home-new-quote
+    timeout: 30000
+- runFlow:
+    file: subflows/create-and-send-quote.yaml
+    env:
+      CUSTOMER: 'Phone Customer'
+      LINE: 'Kitchen socket'
+# The customer said yes on the phone: "סמן כמאושר".
+- scrollUntilVisible:
+    element:
+      id: quote-mark-approved
+- tapOn:
+    id: quote-mark-approved
+- tapOn:
+    id: quote-approval-method-phone
+- tapOn:
+    id: quote-approval-note
+- inputText: 'Approved on a call'
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      id: quote-approve-save
+- tapOn:
+    id: quote-approve-save
+# The job was created with the approval and opens.
+- extendedWaitUntil:
+    visible:
+      id: job-status
+      text: 'ממתינה לתיאום'
+    timeout: 15000
+# It is also listed under Jobs (relaunch to land on Home; the session persists).
+- launchApp:
+    stopApp: true
+- extendedWaitUntil:
+    visible:
+      id: home-jobs
+    timeout: 15000
+- tapOn:
+    id: home-jobs
+- extendedWaitUntil:
+    visible:
+      id: job-row
+    timeout: 15000
+- tapOn:
+    id: job-row
+# Status headings sit at the top of the screen, so each check scrolls back up to them.
+# "קבע מועד" with the default slot (tomorrow), then start and complete.
+- scrollUntilVisible:
+    element:
+      id: job-schedule
+- tapOn:
+    id: job-schedule
+- scrollUntilVisible:
+    element:
+      id: job-schedule-save
+- tapOn:
+    id: job-schedule-save
+- scrollUntilVisible:
+    element:
+      id: job-status
+      text: 'נקבע מועד'
+    direction: UP
+    timeout: 30000
+- assertVisible:
+    id: job-visit-time
+- scrollUntilVisible:
+    element:
+      id: job-start
+- tapOn:
+    id: job-start
+- scrollUntilVisible:
+    element:
+      id: job-status
+      text: 'בביצוע'
+    direction: UP
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      id: job-complete
+- tapOn:
+    id: job-complete
+- scrollUntilVisible:
+    element:
+      id: job-status
+      text: 'הושלמה'
+    direction: UP
+    timeout: 30000
+# "הפק חשבונית": the invoice record, issued, then paid.
+- scrollUntilVisible:
+    element:
+      id: job-create-invoice
+- tapOn:
+    id: job-create-invoice
+- extendedWaitUntil:
+    visible:
+      id: invoice-status
+      text: 'טרם הופקה'
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      id: invoice-document-number-input
+- tapOn:
+    id: invoice-document-number-input
+- inputText: '1001'
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      id: invoice-issue
+- tapOn:
+    id: invoice-issue
+- scrollUntilVisible:
+    element:
+      id: invoice-status
+      text: 'הופקה'
+    direction: UP
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      id: invoice-payment-method-cash
+- tapOn:
+    id: invoice-payment-method-cash
+- scrollUntilVisible:
+    element:
+      id: invoice-mark-paid
+- tapOn:
+    id: invoice-mark-paid
+- scrollUntilVisible:
+    element:
+      id: invoice-status
+      text: 'שולמה'
+    direction: UP
+    timeout: 30000
