@@ -53,8 +53,8 @@ data in this project. Real phone numbers cannot sign in (the SMS provider is a p
 
 ## Limits
 
-- **Jobs:** the app cannot create jobs yet, so invoicing works only on the seeded demo job
-  ("open jobs" in Invoices and Payments).
+- **Jobs:** until the Jobs stage lands, the app cannot create jobs, so invoicing works only on
+  seeded jobs. Once it lands, the whole flow works from an empty account; run the workflow again.
 - **Quote PDF:** the portal's PDF download needs a Chromium binary, which Vercel does not have,
   so it fails in the demo. The quote page itself works.
 - **Push notifications** are off: they need an Expo project and the `notify` Vault secrets.
