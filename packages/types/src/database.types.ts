@@ -989,6 +989,8 @@ export type Database = {
       quote: {
         Row: {
           address_id: string | null;
+          approval_method: string | null;
+          approval_note: string | null;
           approved_at: string | null;
           approved_ip: unknown;
           approved_name: string | null;
@@ -1028,6 +1030,8 @@ export type Database = {
         };
         Insert: {
           address_id?: string | null;
+          approval_method?: string | null;
+          approval_note?: string | null;
           approved_at?: string | null;
           approved_ip?: unknown;
           approved_name?: string | null;
@@ -1067,6 +1071,8 @@ export type Database = {
         };
         Update: {
           address_id?: string | null;
+          approval_method?: string | null;
+          approval_note?: string | null;
           approved_at?: string | null;
           approved_ip?: unknown;
           approved_name?: string | null;
@@ -1530,6 +1536,7 @@ export type Database = {
           error: string;
           event: Database['public']['Enums']['notification_event'];
           id: string;
+          job_id: string;
           kind: string;
           number: number;
           quote_id: string;
@@ -1570,6 +1577,7 @@ export type Database = {
           invoice_id: string;
         }[];
       };
+      create_job_for_quote: { Args: { p_quote_id: string }; Returns: string };
       dismiss_notification: { Args: { p_notification_id: string }; Returns: undefined };
       enqueue_appointment_reminders: { Args: { p_hour?: number; p_now?: string }; Returns: number };
       hit_rate_limit: {
@@ -1578,6 +1586,10 @@ export type Database = {
       };
       import_starter_price_list: { Args: { p_business_id: string; p_list: Json }; Returns: number };
       mark_analytics_sent: { Args: { p_ids: number[] }; Returns: undefined };
+      mark_quote_approved: {
+        Args: { p_method: string; p_note?: string; p_quote_id: string };
+        Returns: string;
+      };
       public_quote_comment: {
         Args: { p_body: string; p_ip: unknown; p_token_hash: string };
         Returns: boolean;
@@ -1607,6 +1619,10 @@ export type Database = {
       };
       revise_quote: { Args: { p_new_quote_id: string; p_quote_id: string }; Returns: string };
       save_quote_draft: { Args: { p_quote: Json }; Returns: undefined };
+      schedule_job: {
+        Args: { p_ends_at: string; p_job_id: string; p_starts_at: string };
+        Returns: string;
+      };
       send_quote: {
         Args: {
           p_quote_id: string;
@@ -1646,6 +1662,10 @@ export type Database = {
           status: Database['public']['Enums']['invoice_status'];
         }[];
       };
+      transition_job: {
+        Args: { p_action: string; p_job_id: string };
+        Returns: Database['public']['Enums']['job_status'];
+      };
       unregister_device: { Args: { p_token: string }; Returns: undefined };
     };
     Enums: {
@@ -1656,7 +1676,8 @@ export type Database = {
       device_platform: 'ios' | 'android' | 'web';
       file_kind: 'logo' | 'quote_attachment' | 'job_photo' | 'invoice_pdf' | 'signature' | 'other';
       invoice_status: 'not_issued' | 'issued' | 'sent' | 'paid' | 'failed' | 'voided';
-      job_status: 'scheduled' | 'in_progress' | 'on_hold' | 'completed' | 'cancelled';
+      job_status:
+        'pending_schedule' | 'scheduled' | 'in_progress' | 'on_hold' | 'completed' | 'cancelled';
       member_role: 'OWNER' | 'ADMIN' | 'EMPLOYEE';
       member_status: 'invited' | 'active' | 'disabled';
       notification_channel: 'sms' | 'whatsapp' | 'email' | 'push' | 'in_app';
@@ -1810,7 +1831,14 @@ export const Constants = {
       device_platform: ['ios', 'android', 'web'],
       file_kind: ['logo', 'quote_attachment', 'job_photo', 'invoice_pdf', 'signature', 'other'],
       invoice_status: ['not_issued', 'issued', 'sent', 'paid', 'failed', 'voided'],
-      job_status: ['scheduled', 'in_progress', 'on_hold', 'completed', 'cancelled'],
+      job_status: [
+        'pending_schedule',
+        'scheduled',
+        'in_progress',
+        'on_hold',
+        'completed',
+        'cancelled',
+      ],
       member_role: ['OWNER', 'ADMIN', 'EMPLOYEE'],
       member_status: ['invited', 'active', 'disabled'],
       notification_channel: ['sms', 'whatsapp', 'email', 'push', 'in_app'],

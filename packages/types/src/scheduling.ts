@@ -46,9 +46,9 @@ export interface PublicQuoteSlot {
   available: boolean;
 }
 
-/** The visit booked through the link. */
+/** The booked visit: the proposed time the customer picked, or one the business set (no slot). */
 export interface PublicQuoteAppointment {
-  slotId: string;
+  slotId: string | null;
   startsAt: string;
   endsAt: string;
 }

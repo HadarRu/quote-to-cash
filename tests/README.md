@@ -24,6 +24,6 @@ SUPABASE_URL=http://127.0.0.1:54321 SUPABASE_ANON_KEY=<anon key> pnpm --filter @
 pnpm test:e2e
 ```
 
-Connection settings come from `SUPABASE_URL`, `SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY`, or from `supabase status` when unset. The suites sign in as the seeded users (`supabase/seed.sql`) with the test OTP in `supabase/config.toml`, and create their own quotes, so they can run repeatedly on one database.
+Connection settings come from `SUPABASE_URL`, `SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY`, or from `supabase status` when unset. The suites sign in as the seeded users (`supabase/seed.sql`) with the test OTP in `supabase/config.toml`, and create their own quotes, jobs and invoices through the app's functions, so they can run repeatedly on one database. `tests/integration/jobs.test.ts` also signs up a brand-new owner with no seed data and walks the whole flow to a paid invoice.
 
 Mobile flows need an Android emulator with the app installed and [Maestro](https://maestro.mobile.dev): `maestro test apps/mobile/.maestro`. Maestro types ASCII only on Android, so flow input is in English.

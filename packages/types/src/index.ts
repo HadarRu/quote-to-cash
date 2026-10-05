@@ -9,5 +9,6 @@ export * from './public-quote.ts';
 export * from './notification.ts';
 export * from './invoice.ts';
 export * from './scheduling.ts';
+export * from './job.ts';
 // Generated from the database by `pnpm supabase:types`; do not edit by hand.
 export * from './database.types.ts';

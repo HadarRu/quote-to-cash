@@ -20,7 +20,7 @@ export type DbView =
       approval: { name: string; at: string } | null;
       rejection: { reason: string | null; at: string } | null;
       slots: { id: string; starts_at: string; ends_at: string; available: boolean }[];
-      appointment: { slot_id: string; starts_at: string; ends_at: string } | null;
+      appointment: { slot_id: string | null; starts_at: string; ends_at: string } | null;
       already?: boolean;
     };
 

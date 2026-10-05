@@ -1,6 +1,7 @@
-# Fresh install, then sign in as the seeded user with phone env PHONE (seed.sql),
-# using the local test OTP. Each flow uses its own phone: Auth allows one code
-# request per phone per minute.
+# Fresh install, then sign in with phone env PHONE using the local test OTP
+# (supabase/config.toml). A seeded user lands on Home; a new phone lands on
+# business setup. Each flow uses its own phone: Auth allows one code request
+# per phone per minute.
 appId: com.quotetocash.app
 ---
 - launchApp:
@@ -28,5 +29,5 @@ appId: com.quotetocash.app
     id: sign-in-verify
 - extendedWaitUntil:
     visible:
-      id: home-new-quote
+      id: 'home-new-quote|setup-name'
     timeout: 30000

@@ -51,7 +51,7 @@ export default function InvoicesList() {
       />
     );
 
-  const { invoices, openJobs, jobsToInvoice } = state.data;
+  const { invoices, jobsToInvoice } = state.data;
   const visible = filterInvoices(invoices, filter);
   const card = [styles.card, { backgroundColor: colors.surface, borderColor: colors.border }];
 
@@ -71,18 +71,6 @@ export default function InvoicesList() {
     router.push({ pathname: '/invoices/[id]', params: { id: result.data.invoiceId } });
   };
 
-  const complete = async (job: JobSummary) => {
-    setBusyJob(job.id);
-    setError(null);
-    const result = await getInvoicesApi().completeJob(job.id);
-    if (result.error) {
-      setBusyJob(null);
-      return setError(errorMessage(result.error.retryable ? 'network' : 'generic'));
-    }
-    await reload();
-    setBusyJob(null);
-  };
-
   return (
     <Screen title={strings.invoices.title}>
       {state.offline ? (
@@ -90,7 +78,7 @@ export default function InvoicesList() {
       ) : null}
       {error ? <Banner tone="error" testID="invoices-error" message={error} /> : null}
 
-      {invoices.length === 0 && jobsToInvoice.length === 0 && openJobs.length === 0 ? (
+      {invoices.length === 0 && jobsToInvoice.length === 0 ? (
         <View style={card} testID="invoices-empty">
           <AppText variant="heading">{strings.invoices.emptyTitle}</AppText>
           <AppText variant="muted">{strings.invoices.emptyBody}</AppText>
@@ -122,28 +110,6 @@ export default function InvoicesList() {
                 loading={busyJob === job.id}
                 disabled={busyJob !== null || state.offline}
                 onPress={() => void create(job)}
-              />
-            </View>
-          ))}
-        </View>
-      ) : null}
-
-      {openJobs.length > 0 ? (
-        <View style={styles.section} testID="invoices-open-jobs">
-          <AppText variant="heading">{strings.invoices.openTitle}</AppText>
-          <AppText variant="muted">{strings.invoices.openBody}</AppText>
-          {openJobs.map((job) => (
-            <View key={job.id} style={[card, styles.row]} testID="open-job">
-              <AppText style={styles.grow}>
-                {job.customerName ? `${job.title} · ${job.customerName}` : job.title}
-              </AppText>
-              <Button
-                testID="job-complete"
-                variant="secondary"
-                label={strings.invoices.completeJob}
-                loading={busyJob === job.id}
-                disabled={busyJob !== null || state.offline}
-                onPress={() => void complete(job)}
               />
             </View>
           ))}

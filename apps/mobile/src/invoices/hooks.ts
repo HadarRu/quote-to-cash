@@ -13,13 +13,11 @@ export function getInvoicesApi(): SupabaseInvoicesApi {
 
 export interface InvoicesOverview {
   invoices: InvoiceListItem[];
-  /** Jobs not completed yet; completing one makes it ready to invoice. */
-  openJobs: JobSummary[];
   /** Completed jobs with no live invoice. */
   jobsToInvoice: JobSummary[];
 }
 
-/** The business's invoices and its jobs: open, and completed without an invoice (offline copy kept). */
+/** The business's invoices and its completed jobs without an invoice (offline copy kept). */
 export function useInvoicesOverview(businessId: string) {
   const fetcher = useCallback(async () => {
     const [invoices, jobs] = await Promise.all([
@@ -31,8 +29,7 @@ export function useInvoicesOverview(businessId: string) {
     return {
       data: {
         invoices: invoices.data,
-        openJobs: jobs.data.open,
-        jobsToInvoice: jobs.data.toInvoice,
+        jobsToInvoice: jobs.data,
       },
       error: null,
     };

@@ -1,9 +1,44 @@
 -- Tenant isolation: a member of business A cannot select, insert or update
--- business B rows in any business table. Relies on supabase/seed.sql.
+-- business B rows in any business table. Users, businesses and customers come
+-- from supabase/seed.sql; everything else is created through the app's flows
+-- for both businesses below.
 begin;
 create extension if not exists pgtap with schema extensions;
+\ir helpers/flow.psql
 
 create schema tests;
+
+-- The whole flow for one business: a quote sent with proposed times, a
+-- customer comment, approval, the booked visit, the job started and
+-- completed, its invoice issued and paid, and a quote photo.
+create function tests.run_flow(p_owner uuid, p_business uuid) returns void language plpgsql as $$
+declare
+  v_quote uuid := flow.draft(p_owner, p_business, 'זרימה מלאה');
+  v_token text := flow.send(p_owner, v_quote, jsonb_build_array(
+    jsonb_build_object('starts_at', '2032-01-05 08:00+00', 'ends_at', '2032-01-05 10:00+00'),
+    jsonb_build_object('starts_at', '2032-01-06 08:00+00', 'ends_at', '2032-01-06 10:00+00')));
+  v_job uuid;
+  v_invoice uuid;
+begin
+  perform public.public_quote_comment(v_token, 'אפשר בבוקר?', null);
+  perform flow.approve(v_token);
+  perform public.public_quote_schedule(v_token,
+    (select s.id from public.quote_slot_option s where s.quote_id = v_quote and s.sort_order = 0), null);
+  v_job := flow.job_of(v_quote);
+  perform flow.move_job(p_owner, v_job, 'start');
+  perform flow.move_job(p_owner, v_job, 'complete');
+  v_invoice := flow.invoice(p_owner, v_job);
+  perform public.transition_invoice(p_owner, v_invoice, 'issued', '{"document_number": "1001"}');
+  perform public.transition_invoice(p_owner, v_invoice, 'paid', '{"method": "bit"}');
+  perform flow.as_user(p_owner);
+  insert into public.file (business_id, kind, bucket, storage_path, mime_type, size_bytes, quote_id)
+  values (p_business, 'quote_attachment', 'quote-photos', p_business || '/quotes/' || v_quote || '/1.jpg',
+          'image/jpeg', 1024, v_quote);
+  reset role;
+end;
+$$;
+select tests.run_flow(flow.owner_a(), flow.business_a());
+select tests.run_flow(flow.owner_b(), flow.business_b());
 
 -- Every table scoped to a business, the column that holds the business id, and
 -- whether members may UPDATE their own rows (positive control).
@@ -23,7 +58,7 @@ insert into tests.tenant_table (name, key_col, updatable, update_col) values
   ('quote_slot_option', 'business_id', true, null),
   ('quote_comment', 'business_id', true, null),
   ('appointment', 'business_id', true, null),
-  ('job', 'business_id', true, null),
+  ('job', 'business_id', false, null),
   ('invoice', 'business_id', false, null),
   ('invoice_item', 'business_id', false, null),
   ('payment', 'business_id', false, null),
@@ -133,10 +168,10 @@ select set_eq(
   'tenant table list covers every public table with business_id'
 );
 
--- Precondition: the seed has business B rows in every table, so "0 rows" below is meaningful.
+-- Precondition: business B has rows in every table, so "0 rows" below is meaningful.
 select ok(
   (select r.data is not null from tests.b_row r where r.name = t.name),
-  format('%s: seed has a business B row', t.name)
+  format('%s: business B has a row', t.name)
 ) from tests.tenant_table t order by t.name;
 
 -- Positive control: A's owner sees A's own rows.
@@ -165,13 +200,13 @@ select is(
 ) from tests.tenant_table t order by t.name;
 
 -- A cannot UPDATE B rows: RLS hides them, so nothing is touched. audit_log,
--- invoice, invoice_item and payment have no client UPDATE privilege at all,
--- so the statement itself is refused.
+-- invoice, invoice_item, payment and job have no client UPDATE privilege at
+-- all, so the statement itself is refused.
 select is(
   tests.result_as(tests.id('owner_a'),
     format('with u as (update public.%1$I set %4$I = %4$I where %2$I = %3$L returning 1) select count(*) from u',
            t.name, t.key_col, tests.id('business_b'), coalesce(t.update_col, t.key_col))),
-  case when t.name in ('audit_log', 'invoice', 'invoice_item', 'payment') then 'ERROR 42501' else '0' end,
+  case when t.name in ('audit_log', 'invoice', 'invoice_item', 'payment', 'job') then 'ERROR 42501' else '0' end,
   format('%s: owner of A cannot update B rows', t.name)
 ) from tests.tenant_table t order by t.name;
 

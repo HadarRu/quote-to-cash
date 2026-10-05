@@ -2,6 +2,7 @@
 -- without duplicates), revisions and cancellation. Relies on supabase/seed.sql.
 begin;
 create extension if not exists pgtap with schema extensions;
+\ir helpers/flow.psql
 select plan(31);
 
 create temp table ids as select
@@ -75,23 +76,23 @@ set local role service_role;
 
 select results_eq(
   $$ select quote_number, already_sent from pg_temp.send((select owner_a from ids), (select q1 from ids), (select key1 from ids)) $$,
-  $$ values (2, false) $$,
-  'sending assigns the next number (the seed used 1)');
+  $$ values (1, false) $$,
+  'sending assigns the business''s first number');
 select results_eq(
   $$ select status::text, token_hash is not null, token_expires_at > now(), (sent_snapshot ->> 'quote_number')::int, total_minor
      from public.quote where id = (select q1 from ids) $$,
-  $$ values ('sent', true, true, 2, 59000::bigint) $$,
+  $$ values ('sent', true, true, 1, 59000::bigint) $$,
   'the sent quote has its token hash, expiry, snapshot and server totals');
 create temp table first_hash as select token_hash from public.quote where id = (select q1 from ids);
 select results_eq(
   $$ select quote_number, already_sent, token_stored from pg_temp.send((select owner_a from ids), (select q1 from ids), (select key1 from ids)) $$,
-  $$ values (2, true, true) $$,
+  $$ values (1, true, true) $$,
   'retrying with the same send key returns the same number and stores the new link');
 select isnt((select token_hash from public.quote where id = (select q1 from ids)), (select token_hash from first_hash),
   'the retry''s token replaces the one whose response was lost');
 select is(
   (select next_quote_number from public.business_settings where business_id = (select business_a from ids)),
-  3, 'a retried send does not consume a number');
+  2, 'a retried send does not consume a number');
 select is((select valid_until from public.quote where id = (select q1 from ids)),
   ((now() + interval '14 days') at time zone 'Asia/Jerusalem')::date, 'sending sets the validity date from the link expiry');
 update public.quote set status = 'viewed', viewed_at = now() where id = (select q1 from ids);
@@ -118,13 +119,13 @@ select throws_ok($$ select * from pg_temp.send((select owner_a from ids), (selec
   '22023', null, 'a quote without lines cannot be sent');
 select results_eq(
   $$ select quote_number from pg_temp.send((select owner_a from ids), (select q2 from ids), (select key2 from ids)) $$,
-  $$ values (3) $$, 'the next quote gets the next number');
+  $$ values (2) $$, 'the next quote gets the next number');
 select is_empty(
   $$ select quote_number from public.quote where business_id = (select business_a from ids) and quote_number is not null
      group by quote_number having count(*) > 1 $$,
   'no two quotes of a business share a number');
 reset role;
-select throws_ok($$ update public.quote set quote_number = 2 where id = (select q2 from ids) $$,
+select throws_ok($$ update public.quote set quote_number = 3 where id = (select q2 from ids) $$,
   '42501', null, 'a number never changes once assigned');
 
 -- ---------------------------------------------------------------- draft-only editing
@@ -160,6 +161,9 @@ select results_eq(
   $$ select status::text, cancelled_at is not null, token_revoked_at is not null from public.quote where id = (select q2 from ids) $$,
   $$ values ('cancelled', true, true) $$, 'cancelling revokes the customer link');
 select lives_ok($$ select public.cancel_quote((select q2 from ids)) $$, 'cancelling twice is harmless');
+reset role;
+select flow.approved_quote(flow.owner_a(), flow.business_a());
+select flow.as_user(flow.owner_a());
 select throws_ok(
   $$ select public.cancel_quote((select id from public.quote where business_id = (select business_a from ids) and status = 'approved')) $$,
   '55000', null, 'an approved quote cannot be cancelled');

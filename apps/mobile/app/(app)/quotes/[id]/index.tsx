@@ -1,4 +1,9 @@
-import { canQuote } from '@q2c/types';
+import {
+  APPROVAL_METHODS,
+  canQuote,
+  MarkQuoteApprovedSchema,
+  type ApprovalMethod,
+} from '@q2c/types';
 import { errorMessage, format, radius, space, strings } from '@q2c/ui';
 import { formatDateTimeIL, formatSlotIL } from '@q2c/utils';
 import { randomUUID } from 'expo-crypto';
@@ -10,9 +15,13 @@ import { useLogoUrl } from '../../../../src/business/useLogoUrl';
 import { AppText } from '../../../../src/components/AppText';
 import { Banner } from '../../../../src/components/Banner';
 import { Button } from '../../../../src/components/Button';
+import { ChoiceChips } from '../../../../src/components/ChoiceChips';
 import { FullScreenMessage } from '../../../../src/components/FullScreenMessage';
 import { LoadingView } from '../../../../src/components/LoadingView';
 import { Screen } from '../../../../src/components/Screen';
+import { TextField } from '../../../../src/components/TextField';
+import { getJobsApi, useQuoteJob } from '../../../../src/jobs/hooks';
+import { jobErrorKey } from '../../../../src/jobs/model';
 import { useQuote, useQuotePhotos } from '../../../../src/quotes/hooks';
 import {
   displayTotals,
@@ -28,6 +37,11 @@ import {
   syncQuotes,
 } from '../../../../src/quotes/sync';
 import { useThemeColors } from '../../../../src/theme';
+
+const approvalOptions = APPROVAL_METHODS.map((method) => ({
+  value: method,
+  label: strings.approvalMethod[method],
+}));
 
 const eventLabels: Record<TimelineEvent, string> = {
   created: strings.quotes.eventCreated,
@@ -179,6 +193,11 @@ function Details({ quote }: { quote: QuoteListItem }) {
         </View>
       ) : null}
 
+      {(quote.status === 'sent' || quote.status === 'viewed') && !quote.pendingSend ? (
+        <MarkApproved quote={quote} />
+      ) : null}
+      {quote.status === 'approved' ? <QuoteJob quoteId={quote.id} /> : null}
+
       {quote.slots?.length ? <Visit quote={quote} /> : null}
 
       <QuoteDocument
@@ -234,6 +253,122 @@ function Details({ quote }: { quote: QuoteListItem }) {
         </>
       )}
     </Screen>
+  );
+}
+
+/** Reloads the quote into the device copy after a server-side change. */
+async function refreshQuote(quoteId: string) {
+  const fresh = await getQuotesApi().fetchQuote(quoteId);
+  if (fresh.data) await (await getQuoteStore()).putQuote(fresh.data);
+  notifyQuotesChanged();
+}
+
+/** "סמן כמאושר": the customer approved by phone, WhatsApp or in person; opens the new job. */
+function MarkApproved({ quote }: { quote: QuoteListItem }) {
+  const colors = useThemeColors();
+  const [open, setOpen] = useState(false);
+  const [method, setMethod] = useState<ApprovalMethod | null>(null);
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  if (!open)
+    return (
+      <Button
+        testID="quote-mark-approved"
+        variant="secondary"
+        label={strings.quotes.markApproved}
+        onPress={() => setOpen(true)}
+      />
+    );
+
+  const save = async () => {
+    const parsed = MarkQuoteApprovedSchema.safeParse({ method, note: note || undefined });
+    if (!parsed.success) return setError(errorMessage(parsed.error.issues[0]?.message ?? ''));
+    setBusy(true);
+    setError(null);
+    const result = await getJobsApi().markApproved(quote.id, parsed.data.method, parsed.data.note);
+    if (result.error) {
+      setBusy(false);
+      return setError(errorMessage(jobErrorKey(result.error, 'quote')));
+    }
+    await refreshQuote(quote.id);
+    setBusy(false);
+    router.push({ pathname: '/jobs/[id]', params: { id: result.data } });
+  };
+
+  return (
+    <View
+      style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}
+      testID="quote-approve-form"
+    >
+      <AppText variant="heading">{strings.quotes.markApprovedTitle}</AppText>
+      <ChoiceChips
+        testID="quote-approval-method"
+        label={strings.quotes.approvalMethodLabel}
+        options={approvalOptions}
+        value={method}
+        onChange={setMethod}
+      />
+      <TextField
+        testID="quote-approval-note"
+        label={strings.quotes.approvalNoteLabel}
+        value={note}
+        onChangeText={setNote}
+        maxLength={500}
+      />
+      {error ? <Banner tone="error" testID="quote-approve-error" message={error} /> : null}
+      <Button
+        testID="quote-approve-save"
+        label={strings.quotes.markApprovedSave}
+        loading={busy}
+        onPress={() => void save()}
+      />
+      <Button variant="ghost" label={strings.quotes.keep} onPress={() => setOpen(false)} />
+    </View>
+  );
+}
+
+/** An approved quote's job: open it, or "צור עבודה" when it has none. */
+function QuoteJob({ quoteId }: { quoteId: string }) {
+  const { state, reload } = useQuoteJob(quoteId);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  if (state.status === 'loading') return null;
+  if (state.status === 'error')
+    return <Banner tone="error" testID="quote-job-error" message={errorMessage(state.error)} />;
+
+  const job = state.data;
+  const create = async () => {
+    setBusy(true);
+    setError(null);
+    const result = await getJobsApi().createForQuote(quoteId);
+    setBusy(false);
+    if (result.error) return setError(errorMessage(jobErrorKey(result.error, 'quote')));
+    await reload();
+    router.push({ pathname: '/jobs/[id]', params: { id: result.data } });
+  };
+
+  return (
+    <>
+      {error ? <Banner tone="error" message={error} /> : null}
+      {job ? (
+        <Button
+          testID="quote-open-job"
+          label={`${strings.quotes.openJob} · ${strings.jobStatus[job.status]}`}
+          onPress={() => router.push({ pathname: '/jobs/[id]', params: { id: job.id } })}
+        />
+      ) : (
+        <Button
+          testID="quote-create-job"
+          label={strings.quotes.createJob}
+          loading={busy}
+          disabled={state.offline}
+          onPress={() => void create()}
+        />
+      )}
+    </>
   );
 }
 
